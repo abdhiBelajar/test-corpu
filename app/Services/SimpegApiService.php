@@ -36,6 +36,13 @@ class SimpegApiService
                 'rumpun_jabatan' => 'Pelaksana',
                 'unit_kerja' => 'Sekretariat Daerah',
             ],
+            '199501012020011005' => [
+                'nama_lengkap' => 'Putu nanta',
+                'jabatan' => 'Pengadministrasi Umum',
+                'rumpun_jabatan' => 'JPT',
+                'unit_kerja' => 'Sekretariat Daerah',
+            ],
+            
         ];
 
         return $mockData[$nip] ?? null;
