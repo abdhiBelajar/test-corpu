@@ -112,64 +112,161 @@ class AuthController extends Controller
         ]);
     }
 
-    public function changePassword(Request $request)
+    public function changePasswordRequestOtp(Request $request)
     {
-        // Validasi input: wajib ada password lama, password baru (min 8 karakter), dan konfirmasi password baru
         $request->validate([
+            'email' => 'nullable|email',
+        ]);
+
+        $pengguna = $request->user();
+
+        // Update email if provided
+        if ($request->has('email') && !empty($request->email)) {
+            $pengguna->email = $request->email;
+            $pengguna->save();
+        }
+
+        if (empty($pengguna->email)) {
+            return response()->json([
+                'message' => 'Email belum diatur. Silakan masukkan email Anda.'
+            ], 400);
+        }
+
+        $otp = (string) rand(100000, 999999);
+        \Illuminate\Support\Facades\Cache::put('otp_change_' . $pengguna->pengguna_id, $otp, now()->addMinutes(10));
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($pengguna->email)->send(new \App\Mail\OtpMail($otp));
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal mengirim email OTP. Pastikan konfigurasi SMTP sudah benar.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Kode OTP telah dikirim ke email Anda.'
+        ]);
+    }
+
+    public function changePasswordVerify(Request $request)
+    {
+        $request->validate([
+            'otp' => 'required|string',
             'password_sebelumnya' => 'required|string',
             'password_baru' => 'required|string|min:8|confirmed',
         ]);
 
         $pengguna = $request->user();
 
-        // Cek apakah password lama yang dimasukkan sesuai dengan yang ada di database
+        // Validasi password lama
         if (!Hash::check($request->password_sebelumnya, $pengguna->kata_sandi_hash)) {
             return response()->json([
                 'message' => 'Password sebelumnya tidak sesuai.'
             ], 400);
         }
 
-        // Pastikan password baru tidak sama persis dengan password lama
+        // Validasi OTP
+        $cachedOtp = \Illuminate\Support\Facades\Cache::get('otp_change_' . $pengguna->pengguna_id);
+        if (!$cachedOtp || $cachedOtp !== $request->otp) {
+            return response()->json([
+                'message' => 'Kode OTP tidak valid atau sudah kedaluwarsa.'
+            ], 400);
+        }
+
         if (Hash::check($request->password_baru, $pengguna->kata_sandi_hash)) {
             return response()->json([
                 'message' => 'Password baru tidak boleh sama dengan password sebelumnya.'
             ], 400);
         }
 
-        // Update password baru di database
         $pengguna->update([
             'kata_sandi_hash' => Hash::make($request->password_baru)
         ]);
+
+        \Illuminate\Support\Facades\Cache::forget('otp_change_' . $pengguna->pengguna_id);
 
         return response()->json([
             'message' => 'Password berhasil diubah.'
         ]);
     }
 
-    public function resetPasswordToDefault(Request $request)
+    public function forgotPassword(Request $request)
     {
-        // Validasi hanya butuh NIP (karena simulasi kita belum punya data NIK/Tanggal Lahir dari SIMPEG)
         $request->validate([
             'nip' => 'required|string',
+            'email' => 'required|email',
         ]);
 
         $pengguna = Pengguna::where('nip', $request->nip)->first();
 
         if (!$pengguna) {
             return response()->json([
-                'message' => 'NIP tidak ditemukan di sistem aplikasi E-Learning.'
+                'message' => 'NIP tidak ditemukan.'
             ], 404);
         }
 
-        // Kembalikan ke password default (8 angka terakhir NIP)
-        $defaultPassword = substr($request->nip, -8);
-        
-        $pengguna->update([
-            'kata_sandi_hash' => Hash::make($defaultPassword)
-        ]);
+        // Jika email di database kosong, simpan email yang baru dimasukkan.
+        // Jika sudah ada, pastikan email yang dimasukkan cocok dengan database.
+        if (empty($pengguna->email)) {
+            $pengguna->email = $request->email;
+            $pengguna->save();
+        } else {
+            if ($pengguna->email !== $request->email) {
+                return response()->json([
+                    'message' => 'Email tidak cocok dengan data pengguna yang terdaftar.'
+                ], 400);
+            }
+        }
+
+        $otp = (string) rand(100000, 999999);
+        \Illuminate\Support\Facades\Cache::put('otp_reset_' . $pengguna->nip, $otp, now()->addMinutes(10));
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($pengguna->email)->send(new \App\Mail\OtpMail($otp));
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal mengirim email OTP. Pastikan konfigurasi SMTP sudah benar.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
 
         return response()->json([
-            'message' => 'Password berhasil di-reset! Silakan login menggunakan 8 angka terakhir NIP Anda.'
+            'message' => 'Kode OTP telah dikirim ke email Anda.'
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'nip' => 'required|string',
+            'otp' => 'required|string',
+            'password_baru' => 'required|string|min:8|confirmed',
+        ]);
+
+        $pengguna = Pengguna::where('nip', $request->nip)->first();
+
+        if (!$pengguna) {
+            return response()->json([
+                'message' => 'NIP tidak ditemukan.'
+            ], 404);
+        }
+
+        $cachedOtp = \Illuminate\Support\Facades\Cache::get('otp_reset_' . $pengguna->nip);
+        if (!$cachedOtp || $cachedOtp !== $request->otp) {
+            return response()->json([
+                'message' => 'Kode OTP tidak valid atau sudah kedaluwarsa.'
+            ], 400);
+        }
+
+        $pengguna->update([
+            'kata_sandi_hash' => Hash::make($request->password_baru)
+        ]);
+
+        \Illuminate\Support\Facades\Cache::forget('otp_reset_' . $pengguna->nip);
+
+        return response()->json([
+            'message' => 'Password berhasil di-reset! Silakan login dengan password baru Anda.'
         ]);
     }
 }

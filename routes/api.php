@@ -12,11 +12,13 @@ use App\Http\Controllers\Api\AdminBkpsdm\LaporanController;
 use App\Http\Controllers\Api\AdminBkpsdm\PusatBantuanController;
 
 Route::post('/login', [AuthController::class, 'login']);
-Route::post('/reset-password-default', [AuthController::class, 'resetPasswordToDefault']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
-    Route::post('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/change-password/request-otp', [AuthController::class, 'changePasswordRequestOtp']);
+    Route::post('/change-password/verify', [AuthController::class, 'changePasswordVerify']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
@@ -50,4 +52,23 @@ Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')
     Route::post('/faq', [PusatBantuanController::class, 'storeFaq']);
     Route::put('/faq/{id}', [PusatBantuanController::class, 'updateFaq']);
     Route::delete('/faq/{id}', [PusatBantuanController::class, 'destroyFaq']);
+});
+
+// Admin Komunitas Routes
+Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komunitas')->group(function () {
+    // Pembelajaran
+    Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);
+    Route::post('/pembelajaran/{id}/ajukan-approval', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'ajukanApproval']);
+
+    // Modul & Materi
+    Route::apiResource('/pembelajaran.modul', \App\Http\Controllers\Api\AdminKomunitas\ModulController::class)->shallow();
+    Route::apiResource('/modul.materi', \App\Http\Controllers\Api\AdminKomunitas\MateriController::class)->shallow();
+
+    // Evaluasi
+    Route::apiResource('/modul.kuis', \App\Http\Controllers\Api\AdminKomunitas\KuisController::class)->shallow();
+    Route::apiResource('/pembelajaran.post-test', \App\Http\Controllers\Api\AdminKomunitas\PostTestController::class)->shallow();
+
+    // JP & Monitoring
+    Route::post('/pembelajaran/{id}/jp', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranJpController::class, 'store']);
+    Route::get('/pembelajaran/{id}/peserta', [\App\Http\Controllers\Api\AdminKomunitas\MonitoringController::class, 'index']);
 });
