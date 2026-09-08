@@ -187,9 +187,6 @@ class PembelajaranController extends Controller
         if ($request->hasFile('surat_pernyataan')) {
             $path = $request->file('surat_pernyataan')->store('surat_pernyataan', 'public');
             $updateData['surat_pernyataan_url'] = '/storage/' . $path;
-        } elseif (empty($pembelajaran->surat_pernyataan_url)) {
-            // Jika belum ada surat pernyataan sama sekali, maka wajib
-             return response()->json(['message' => 'File surat_pernyataan wajib diunggah.'], 400);
         }
 
         // Cek validasi 3 unsur wajib (Overview, Substansi, Evaluasi)
