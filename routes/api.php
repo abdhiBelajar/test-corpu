@@ -60,6 +60,7 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     // Pembelajaran
     Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);
     Route::post('/pembelajaran/{id}/ajukan-approval', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'ajukanApproval']);
+    Route::get('/komunitas-saya', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'myKomunitas']);
 
     // Modul & Materi
     Route::apiResource('/pembelajaran.modul', \App\Http\Controllers\Api\AdminKomunitas\ModulController::class)->shallow();
