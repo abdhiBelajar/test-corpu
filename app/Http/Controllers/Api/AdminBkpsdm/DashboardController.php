@@ -18,8 +18,8 @@ class DashboardController extends Controller
         $trendSertifikat = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = \Carbon\Carbon::now()->subMonths($i);
-            $count = \App\Models\Sertifikat::whereYear('diterbitkan_pada', $month->year)
-                                            ->whereMonth('diterbitkan_pada', $month->month)
+            $count = \App\Models\Sertifikat::whereYear('tanggal_terbit', $month->year)
+                                            ->whereMonth('tanggal_terbit', $month->month)
                                             ->count();
             $trendSertifikat[] = [
                 'bulan' => $month->format('M'),
