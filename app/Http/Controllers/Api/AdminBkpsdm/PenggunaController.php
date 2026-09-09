@@ -31,7 +31,8 @@ class PenggunaController extends Controller
             'peran' => 'required|in:admin_bkpsdm,admin_komunitas,peserta',
             'jabatan' => 'nullable|string',
             'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
-            'unit_kerja' => 'nullable|string'
+            'unit_kerja' => 'nullable|string',
+            'komunitas_id' => 'required_if:peran,admin_komunitas|exists:komunitas,komunitas_id'
         ]);
 
         $passwordDefault = substr($request->nip, -8);
@@ -46,6 +47,13 @@ class PenggunaController extends Controller
             'unit_kerja' => $request->unit_kerja,
             'status' => 'aktif'
         ]);
+
+        if ($request->peran === 'admin_komunitas' && $request->has('komunitas_id')) {
+            \App\Models\AdminKomunitas::create([
+                'pengguna_id' => $pengguna->pengguna_id,
+                'komunitas_id' => $request->komunitas_id
+            ]);
+        }
 
         return response()->json([
             'message' => 'Pengguna berhasil ditambahkan',
@@ -72,14 +80,27 @@ class PenggunaController extends Controller
     {
         $request->validate([
             'peran' => 'nullable|in:admin_bkpsdm,admin_komunitas,peserta',
-            'status' => 'nullable|in:aktif,nonaktif'
+            'status' => 'nullable|in:aktif,nonaktif',
+            'komunitas_id' => 'required_if:peran,admin_komunitas|exists:komunitas,komunitas_id'
         ]);
 
         $pengguna = \App\Models\Pengguna::findOrFail($id);
         
         if ($request->has('peran')) {
             $pengguna->peran = $request->peran;
+            
+            if ($request->peran === 'admin_komunitas') {
+                if ($request->has('komunitas_id')) {
+                    \App\Models\AdminKomunitas::updateOrCreate(
+                        ['pengguna_id' => $pengguna->pengguna_id],
+                        ['komunitas_id' => $request->komunitas_id]
+                    );
+                }
+            } else {
+                \App\Models\AdminKomunitas::where('pengguna_id', $pengguna->pengguna_id)->delete();
+            }
         }
+        
         if ($request->has('status')) {
             $pengguna->status = $request->status;
         }
