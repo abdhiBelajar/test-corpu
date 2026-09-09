@@ -66,7 +66,7 @@ class MateriController extends Controller
             'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|string',
             'file_pdf' => 'required_if:tipe_materi,pdf|file|mimes:pdf|max:10240',
             'durasi_menit' => 'required|integer|min:1',
-            'apakah_wajib' => 'boolean',
+            'apakah_wajib' => 'nullable|in:0,1,true,false',
             'urutan' => 'required|integer|min:1',
         ]);
 
@@ -84,7 +84,7 @@ class MateriController extends Controller
             'tipe_materi' => $request->tipe_materi,
             'tautan_atau_berkas' => $url,
             'durasi_menit' => $request->durasi_menit,
-            'apakah_wajib' => $request->has('apakah_wajib') ? $request->apakah_wajib : true,
+            'apakah_wajib' => $request->has('apakah_wajib') ? filter_var($request->apakah_wajib, FILTER_VALIDATE_BOOLEAN) : true,
             'urutan' => $request->urutan,
         ]);
 
@@ -128,13 +128,15 @@ class MateriController extends Controller
         $request->validate([
             'judul_materi' => 'sometimes|string|max:255',
             'durasi_menit' => 'sometimes|integer|min:1',
-            'apakah_wajib' => 'sometimes|boolean',
+            'apakah_wajib' => 'nullable|in:0,1,true,false',
             'urutan' => 'sometimes|integer|min:1',
         ]);
 
-        $materi->update($request->only([
-            'judul_materi', 'durasi_menit', 'apakah_wajib', 'urutan'
-        ]));
+        $updateData = $request->only(['judul_materi', 'durasi_menit', 'urutan']);
+        if ($request->has('apakah_wajib')) {
+            $updateData['apakah_wajib'] = filter_var($request->apakah_wajib, FILTER_VALIDATE_BOOLEAN);
+        }
+        $materi->update($updateData);
 
         $this->rekalkulasiDurasiModul($modul->modul_id);
 

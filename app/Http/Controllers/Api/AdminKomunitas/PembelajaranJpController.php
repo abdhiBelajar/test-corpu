@@ -28,7 +28,7 @@ class PembelajaranJpController extends Controller
         }
 
         $request->validate([
-            'jenis_pelatihan' => 'required|string|in:pelatihan,seminar,workshop,bimtek,kursus,magang',
+            'jenis_pelatihan' => 'required|string|in:formal,bimtek,coaching,mentoring',
         ]);
 
         // Hitung ulang dari semua modul
