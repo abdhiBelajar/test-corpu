@@ -24,9 +24,13 @@ class Modul extends Model
         return $this->hasMany(Materi::class, 'modul_id', 'modul_id');
     }
 
+    public function materis() {
+        return $this->hasMany(Materi::class, 'modul_id', 'modul_id')->orderBy('urutan');
+    }
+
     public function kuis()
     {
-        return $this->hasOne(Kuis::class, 'modul_id', 'modul_id');
+        return $this->hasMany(Kuis::class, 'modul_id', 'modul_id');
     }
 
     public function progresModul()

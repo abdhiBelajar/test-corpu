@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')
 
     // Approval Konten
     Route::get('/approval', [ValidasiPembelajaranController::class, 'index']);
+    Route::get('/approval/{id}', [ValidasiPembelajaranController::class, 'show']);
     Route::post('/approval/{pembelajaran_id}', [ValidasiPembelajaranController::class, 'store']);
 
     // Verifikasi JP

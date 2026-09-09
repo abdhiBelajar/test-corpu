@@ -29,14 +29,22 @@ class Pembelajaran extends Model
         return $this->hasMany(Modul::class, 'pembelajaran_id', 'pembelajaran_id');
     }
 
+    public function moduls() {
+        return $this->hasMany(Modul::class, 'pembelajaran_id', 'pembelajaran_id')->orderBy('urutan');
+    }
+
     public function pembelajaranJp()
     {
-        return $this->hasOne(PembelajaranJp::class, 'pembelajaran_id', 'pembelajaran_id');
+        return $this->hasMany(PembelajaranJp::class, 'pembelajaran_id', 'pembelajaran_id');
     }
 
     public function postTest()
     {
         return $this->hasOne(PostTest::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function postTests() {
+        return $this->hasMany(PostTest::class, 'pembelajaran_id', 'pembelajaran_id');
     }
 
     public function validasi()

@@ -54,4 +54,19 @@ class ValidasiPembelajaranController extends Controller
             ]
         ]);
     }
+
+    public function show(string $id)
+    {
+        $pembelajaran = \App\Models\Pembelajaran::with([
+            'pembelajaranJp',
+            'moduls.materis',
+            'moduls.kuis',
+            'postTests'
+        ])->findOrFail($id);
+
+        return response()->json([
+            'message' => 'Detail pembelajaran berhasil diambil',
+            'data' => $pembelajaran
+        ]);
+    }
 }
