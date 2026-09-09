@@ -13,4 +13,14 @@ class ValidasiPembelajaran extends Model
     const UPDATED_AT = null;
     
     protected $guarded = [];
+
+    public function pembelajaran()
+    {
+        return $this->belongsTo(Pembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function pemvalidasi()
+    {
+        return $this->belongsTo(Pengguna::class, 'divalidasi_oleh_pengguna_id', 'pengguna_id');
+    }
 }

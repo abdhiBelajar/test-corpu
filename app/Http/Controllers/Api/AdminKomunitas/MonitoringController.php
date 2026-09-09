@@ -24,7 +24,7 @@ class MonitoringController extends Controller
 
         $peserta = \App\Models\PendaftaranPembelajaran::where('pembelajaran_id', $pembelajaran_id)
                         ->with(['pengguna' => function($q) {
-                            $q->select('pengguna_id', 'nama_lengkap', 'nip', 'rumpun_jabatan', 'instansi_id');
+                            $q->select('pengguna_id', 'nama_lengkap', 'nip', 'rumpun_jabatan', 'unit_kerja', 'jabatan');
                         }])
                         ->get();
 
@@ -35,3 +35,4 @@ class MonitoringController extends Controller
     }
 
 }
+

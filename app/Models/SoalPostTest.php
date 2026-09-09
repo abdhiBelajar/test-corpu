@@ -17,4 +17,9 @@ class SoalPostTest extends Model
     protected $casts = [
         'pilihan_jawaban_json' => 'array',
     ];
+
+    public function postTest()
+    {
+        return $this->belongsTo(PostTest::class, 'post_test_id', 'post_test_id');
+    }
 }

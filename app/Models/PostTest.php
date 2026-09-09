@@ -13,4 +13,19 @@ class PostTest extends Model
     const UPDATED_AT = null;
     
     protected $guarded = [];
+
+    public function pembelajaran()
+    {
+        return $this->belongsTo(Pembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function soalPostTest()
+    {
+        return $this->hasMany(SoalPostTest::class, 'post_test_id', 'post_test_id');
+    }
+
+    public function riwayatPostTest()
+    {
+        return $this->hasMany(RiwayatPostTest::class, 'post_test_id', 'post_test_id');
+    }
 }
