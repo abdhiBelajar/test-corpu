@@ -13,4 +13,39 @@ class Pembelajaran extends Model
     const UPDATED_AT = 'diperbarui_pada';
     
     protected $guarded = [];
+
+    public function komunitas()
+    {
+        return $this->belongsTo(Komunitas::class, 'komunitas_id', 'komunitas_id');
+    }
+
+    public function perancang()
+    {
+        return $this->belongsTo(Pengguna::class, 'dibuat_oleh_pengguna_id', 'pengguna_id');
+    }
+
+    public function modul()
+    {
+        return $this->hasMany(Modul::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function pembelajaranJp()
+    {
+        return $this->hasOne(PembelajaranJp::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function postTest()
+    {
+        return $this->hasOne(PostTest::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function validasi()
+    {
+        return $this->hasOne(ValidasiPembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
+
+    public function pendaftaran()
+    {
+        return $this->hasMany(PendaftaranPembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
 }

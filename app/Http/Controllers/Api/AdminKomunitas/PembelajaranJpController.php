@@ -28,7 +28,7 @@ class PembelajaranJpController extends Controller
         }
 
         $request->validate([
-            'jenis_pelatihan' => 'required|string|max:100',
+            'jenis_pelatihan' => 'required|string|in:pelatihan,seminar,workshop,bimtek,kursus,magang',
         ]);
 
         // Hitung ulang dari semua modul
@@ -39,8 +39,8 @@ class PembelajaranJpController extends Controller
             ['pembelajaran_id' => $pembelajaran_id],
             [
                 'jenis_pelatihan' => $request->jenis_pelatihan,
-                'total_durasi_menit' => $totalDurasi,
-                'total_jp' => $totalJp,
+                'durasi_menit'    => $totalDurasi,
+                'jp_dihitung_sistem' => $totalJp,
             ]
         );
 

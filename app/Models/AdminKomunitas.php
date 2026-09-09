@@ -13,4 +13,14 @@ class AdminKomunitas extends Model
     const UPDATED_AT = null;
     
     protected $guarded = [];
+
+    public function pengguna()
+    {
+        return $this->belongsTo(Pengguna::class, 'pengguna_id', 'pengguna_id');
+    }
+
+    public function komunitas()
+    {
+        return $this->belongsTo(Komunitas::class, 'komunitas_id', 'komunitas_id');
+    }
 }

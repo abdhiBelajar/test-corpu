@@ -13,4 +13,14 @@ class Materi extends Model
     const UPDATED_AT = null;
     
     protected $guarded = [];
+
+    public function modul()
+    {
+        return $this->belongsTo(Modul::class, 'modul_id', 'modul_id');
+    }
+
+    public function progresMateri()
+    {
+        return $this->hasMany(ProgresMateri::class, 'materi_id', 'materi_id');
+    }
 }

@@ -17,4 +17,9 @@ class SoalKuis extends Model
     protected $casts = [
         'pilihan_jawaban_json' => 'array',
     ];
+
+    public function kuis()
+    {
+        return $this->belongsTo(Kuis::class, 'kuis_id', 'kuis_id');
+    }
 }

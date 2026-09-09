@@ -15,4 +15,9 @@ class PembelajaranJp extends Model
     public $timestamps = false; // Manually handle timestamps if needed
     
     protected $guarded = [];
+
+    public function pembelajaran()
+    {
+        return $this->belongsTo(Pembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+    }
 }
