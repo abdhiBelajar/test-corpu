@@ -42,7 +42,7 @@ class ValidasiPembelajaranController extends Controller
             ]);
         } else {
             $pembelajaran->update([
-                'status' => 'draft' // kembali ke draft jika ditolak
+                'status' => 'ditolak'
             ]);
         }
 

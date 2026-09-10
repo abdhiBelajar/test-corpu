@@ -49,7 +49,7 @@ class Pembelajaran extends Model
 
     public function validasi()
     {
-        return $this->hasOne(ValidasiPembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
+        return $this->hasOne(ValidasiPembelajaran::class, 'pembelajaran_id', 'pembelajaran_id')->latestOfMany('divalidasi_pada');
     }
 
     public function pendaftaran()

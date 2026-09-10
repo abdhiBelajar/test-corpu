@@ -21,7 +21,7 @@ class MateriController extends Controller
         if (!$modul) return;
 
         $totalMenit = \App\Models\Materi::where('modul_id', $modul_id)->sum('durasi_menit');
-        $jp = min(3, $totalMenit / 135);
+        $jp = round(min(3, $totalMenit / 135), 2);
 
         $modul->update([
             'durasi_total_menit' => $totalMenit,
@@ -63,29 +63,36 @@ class MateriController extends Controller
         $request->validate([
             'judul_materi' => 'required|string|max:255',
             'tipe_materi' => 'required|in:pdf,video_embed',
-            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|string',
-            'file_pdf' => 'required_if:tipe_materi,pdf|file|mimes:pdf|max:10240',
-            'durasi_menit' => 'required|integer|min:1',
-            'apakah_wajib' => 'nullable|in:0,1,true,false',
-            'urutan' => 'required|integer|min:1',
+            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|nullable|string',
+            'file_pdf' => 'required_if:tipe_materi,pdf|nullable|file|mimes:pdf|max:10240',
+            'durasi_menit' => 'nullable|integer|min:1',
+            'apakah_wajib' => 'nullable',
+            'urutan' => 'nullable|integer|min:1',
         ]);
 
         $url = '';
         if ($request->tipe_materi === 'pdf') {
+            if (!$request->hasFile('file_pdf')) {
+                return response()->json(['message' => 'File PDF wajib diunggah.'], 422);
+            }
             $path = $request->file('file_pdf')->store('materi_pdf', 'public');
             $url = '/storage/' . $path;
         } else {
-            $url = $request->tautan_atau_berkas_embed;
+            $url = $request->tautan_atau_berkas_embed ?: '';
         }
+
+        $maxUrutan = \App\Models\Materi::where('modul_id', $modul_id)->max('urutan') ?? 0;
+        $urutan = $request->urutan ?? ($maxUrutan + 1);
+        $durasiMenit = $request->durasi_menit ?? 15;
 
         $materi = \App\Models\Materi::create([
             'modul_id' => $modul_id,
             'judul_materi' => $request->judul_materi,
             'tipe_materi' => $request->tipe_materi,
             'tautan_atau_berkas' => $url,
-            'durasi_menit' => $request->durasi_menit,
+            'durasi_menit' => $durasiMenit,
             'apakah_wajib' => $request->has('apakah_wajib') ? filter_var($request->apakah_wajib, FILTER_VALIDATE_BOOLEAN) : true,
-            'urutan' => $request->urutan,
+            'urutan' => $urutan,
         ]);
 
         $this->rekalkulasiDurasiModul($modul_id);

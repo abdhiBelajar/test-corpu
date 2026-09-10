@@ -30,7 +30,7 @@ class Modul extends Model
 
     public function kuis()
     {
-        return $this->hasMany(Kuis::class, 'modul_id', 'modul_id');
+        return $this->hasOne(Kuis::class, 'modul_id', 'modul_id');
     }
 
     public function progresModul()

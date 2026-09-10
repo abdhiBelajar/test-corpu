@@ -34,5 +34,81 @@ class MonitoringController extends Controller
         ]);
     }
 
+    public function laporanProgress(Request $request)
+    {
+        $user = $request->user();
+
+        $komunitasIds = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)->pluck('komunitas_id');
+        $pembelajaranList = \App\Models\Pembelajaran::whereIn('komunitas_id', $komunitasIds)
+            ->select('pembelajaran_id', 'judul_pembelajaran', 'kategori', 'status')
+            ->get();
+        $pembelajaranIds = $pembelajaranList->pluck('pembelajaran_id');
+
+        // Global stats for this admin's community
+        $allPendaftaran = \App\Models\PendaftaranPembelajaran::whereIn('pembelajaran_id', $pembelajaranIds)->get();
+        $pendaftaranIds = $allPendaftaran->pluck('pendaftaran_id');
+        $totalPeserta = $allPendaftaran->unique('pengguna_id')->count();
+        $rataRataProgres = $allPendaftaran->count() > 0 ? round($allPendaftaran->avg('persentase_progres') ?? 0, 1) : 0;
+        $lulusPostTest = $allPendaftaran->whereIn('status_pendaftaran', ['lulus', 'selesai'])->count();
+        $sertifikatTerbit = \App\Models\Sertifikat::whereIn('pendaftaran_id', $pendaftaranIds)->count();
+
+        // Query with filters
+        $query = \App\Models\PendaftaranPembelajaran::whereIn('pembelajaran_id', $pembelajaranIds)
+            ->with([
+                'pengguna:pengguna_id,nama_lengkap,nip,rumpun_jabatan,unit_kerja,jabatan',
+                'pembelajaran:pembelajaran_id,judul_pembelajaran,kategori'
+            ]);
+
+        if ($request->filled('pembelajaran_id') && $request->pembelajaran_id !== 'all') {
+            $query->where('pembelajaran_id', $request->pembelajaran_id);
+        }
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status_pendaftaran', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->whereHas('pengguna', function($q) use ($s) {
+                $q->where('nama_lengkap', 'like', "%{$s}%")
+                  ->orWhere('nip', 'like', "%{$s}%");
+            });
+        }
+
+        $pendaftaran = $query->latest('terdaftar_pada')->get();
+
+        $pesertaData = $pendaftaran->map(function($p) {
+            $latestPostTest = \App\Models\RiwayatPostTest::where('pendaftaran_id', $p->pendaftaran_id)
+                ->latest('dikirim_pada')
+                ->first();
+
+            return [
+                'pendaftaran_id' => $p->pendaftaran_id,
+                'pengguna_id' => $p->pengguna_id,
+                'nama' => $p->pengguna->nama_lengkap ?? 'Peserta',
+                'nip' => $p->pengguna->nip ?? '-',
+                'unit_kerja' => $p->pengguna->unit_kerja ?? 'Pemerintah Kabupaten Buleleng',
+                'judul_pembelajaran' => $p->pembelajaran->judul_pembelajaran ?? '-',
+                'progres' => round($p->persentase_progres, 1),
+                'nilai_post_test' => $latestPostTest ? $latestPostTest->nilai : null,
+                'status' => $p->status_pendaftaran,
+                'terdaftar_pada' => $p->terdaftar_pada,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Laporan progress berhasil diambil',
+            'data' => [
+                'stats' => [
+                    'total_peserta' => $totalPeserta,
+                    'rata_rata_progres' => round($rataRataProgres, 1),
+                    'lulus_post_test' => $lulusPostTest,
+                    'sertifikat_terbit' => $sertifikatTerbit,
+                ],
+                'peserta' => $pesertaData,
+                'pembelajaran_list' => $pembelajaranList
+            ]
+        ]);
+    }
 }
 

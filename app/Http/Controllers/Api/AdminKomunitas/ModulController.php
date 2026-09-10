@@ -24,7 +24,7 @@ class ModulController extends Controller
 
         $moduls = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)
                     ->orderBy('urutan', 'asc')
-                    ->with('materi', 'kuis')
+                    ->with('materi', 'kuis.soalKuis')
                     ->get();
 
         return response()->json([
@@ -46,18 +46,21 @@ class ModulController extends Controller
 
         $request->validate([
             'judul_modul' => 'required|string|max:255',
-            'gambaran_umum' => 'required|string',
+            'gambaran_umum' => 'nullable|string',
             'evaluasi_deskripsi' => 'nullable|string',
-            'urutan' => 'required|integer|min:1',
+            'urutan' => 'nullable|integer|min:1',
             'info_tatap_muka' => 'nullable|string',
         ]);
+
+        $maxUrutan = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)->max('urutan') ?? 0;
+        $urutan = $request->urutan ?? ($maxUrutan + 1);
 
         $modul = \App\Models\Modul::create([
             'pembelajaran_id' => $pembelajaran_id,
             'judul_modul' => $request->judul_modul,
-            'gambaran_umum' => $request->gambaran_umum,
-            'evaluasi_deskripsi' => $request->evaluasi_deskripsi,
-            'urutan' => $request->urutan,
+            'gambaran_umum' => $request->gambaran_umum ?: ('Gambaran umum modul ' . $request->judul_modul),
+            'evaluasi_deskripsi' => $request->evaluasi_deskripsi ?: 'Evaluasi pemahaman modul',
+            'urutan' => $urutan,
             'durasi_total_menit' => 0,
             'jp_modul' => 0,
             'info_tatap_muka' => $request->info_tatap_muka,
@@ -65,13 +68,13 @@ class ModulController extends Controller
 
         return response()->json([
             'message' => 'Modul berhasil ditambahkan',
-            'data' => $modul
+            'data' => $modul->load('materi', 'kuis.soalKuis')
         ], 201);
     }
 
     public function show(Request $request, $id)
     {
-        $modul = \App\Models\Modul::with('materi', 'kuis')->findOrFail($id);
+        $modul = \App\Models\Modul::with('materi', 'kuis.soalKuis')->findOrFail($id);
 
         if (!$this->isPembelajaranAdmin($request->user(), $modul->pembelajaran_id)) {
             return response()->json(['message' => 'Akses ditolak.'], 403);

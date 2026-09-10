@@ -57,6 +57,9 @@ Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')
 
 // Admin Komunitas Routes
 Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komunitas')->group(function () {
+    // Dashboard
+    Route::get('/dashboard', [\App\Http\Controllers\Api\AdminKomunitas\DashboardController::class, 'index']);
+
     // Pembelajaran
     Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);
     Route::post('/pembelajaran/{id}/ajukan-approval', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'ajukanApproval']);
@@ -73,4 +76,10 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     // JP & Monitoring
     Route::post('/pembelajaran/{id}/jp', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranJpController::class, 'store']);
     Route::get('/pembelajaran/{id}/peserta', [\App\Http\Controllers\Api\AdminKomunitas\MonitoringController::class, 'index']);
+    Route::get('/laporan-progress', [\App\Http\Controllers\Api\AdminKomunitas\MonitoringController::class, 'laporanProgress']);
+
+    // Pusat Bantuan
+    Route::get('/faq', [\App\Http\Controllers\Api\AdminKomunitas\PusatBantuanController::class, 'faq']);
+    Route::post('/tiket', [\App\Http\Controllers\Api\AdminKomunitas\PusatBantuanController::class, 'storeTiket']);
+    Route::get('/tiket', [\App\Http\Controllers\Api\AdminKomunitas\PusatBantuanController::class, 'myTiket']);
 });

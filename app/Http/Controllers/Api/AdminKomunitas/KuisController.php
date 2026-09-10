@@ -75,10 +75,14 @@ class KuisController extends Controller
 
             if ($request->has('soal') && is_array($request->soal)) {
                 foreach ($request->soal as $item) {
+                    $pilihan = is_string($item['pilihan_jawaban_json']) 
+                        ? json_decode($item['pilihan_jawaban_json'], true) 
+                        : $item['pilihan_jawaban_json'];
+
                     \App\Models\SoalKuis::create([
                         'kuis_id' => $kuis->kuis_id,
                         'teks_soal' => $item['teks_soal'],
-                        'pilihan_jawaban_json' => json_encode($item['pilihan_jawaban_json']),
+                        'pilihan_jawaban_json' => $pilihan,
                         'kunci_jawaban' => $item['kunci_jawaban'],
                         'bobot_nilai' => $item['bobot_nilai'] ?? 1,
                     ]);
@@ -134,7 +138,7 @@ class KuisController extends Controller
             'tampilkan_kunci_setelah' => 'sometimes|boolean',
             'soal' => 'nullable|array', // jika dikirim, akan mereplace/sync seluruh soal
             'soal.*.teks_soal' => 'required|string',
-            'soal.*.pilihan_jawaban_json' => 'required|array',
+            'soal.*.pilihan_jawaban_json' => 'required',
             'soal.*.kunci_jawaban' => 'required|string|max:10',
             'soal.*.bobot_nilai' => 'nullable|numeric|min:0',
         ]);
@@ -151,10 +155,14 @@ class KuisController extends Controller
                 \App\Models\SoalKuis::where('kuis_id', $kuis->kuis_id)->delete();
 
                 foreach ($request->soal as $item) {
+                    $pilihan = is_string($item['pilihan_jawaban_json']) 
+                        ? json_decode($item['pilihan_jawaban_json'], true) 
+                        : $item['pilihan_jawaban_json'];
+
                     \App\Models\SoalKuis::create([
                         'kuis_id' => $kuis->kuis_id,
                         'teks_soal' => $item['teks_soal'],
-                        'pilihan_jawaban_json' => json_encode($item['pilihan_jawaban_json']),
+                        'pilihan_jawaban_json' => $pilihan,
                         'kunci_jawaban' => $item['kunci_jawaban'],
                         'bobot_nilai' => $item['bobot_nilai'] ?? 1,
                     ]);
