@@ -97,4 +97,12 @@ Route::middleware(['auth:sanctum', 'role:peserta'])->prefix('user')->group(funct
     Route::get('/my-courses', [\App\Http\Controllers\Api\User\MyCourseController::class, 'index']);
     Route::get('/courses/{pembelajaran_id}', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'show']);
     Route::post('/courses/{pembelajaran_id}/materi/{materi_id}/read', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'markMateriAsRead']);
+
+    // Post Test & Sertifikat
+    Route::get('/courses/{pembelajaran_id}/post-test', [\App\Http\Controllers\Api\User\PostTestController::class, 'show']);
+    Route::post('/courses/{pembelajaran_id}/post-test/submit', [\App\Http\Controllers\Api\User\PostTestController::class, 'submit']);
+    Route::get('/certificates', [\App\Http\Controllers\Api\User\SertifikatController::class, 'index']);
+
+    // Pusat Bantuan
+    Route::post('/bantuan/tiket', [\App\Http\Controllers\Api\User\BantuanController::class, 'submitTiket']);
 });
