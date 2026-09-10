@@ -83,3 +83,18 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     Route::post('/tiket', [\App\Http\Controllers\Api\AdminKomunitas\PusatBantuanController::class, 'storeTiket']);
     Route::get('/tiket', [\App\Http\Controllers\Api\AdminKomunitas\PusatBantuanController::class, 'myTiket']);
 });
+
+// Peserta (User) Routes
+Route::middleware(['auth:sanctum', 'role:peserta'])->prefix('user')->group(function () {
+    // Dashboard
+    Route::get('/dashboard', [\App\Http\Controllers\Api\User\DashboardController::class, 'index']);
+
+    // Katalog & Pendaftaran
+    Route::get('/katalog', [\App\Http\Controllers\Api\User\KatalogController::class, 'index']);
+    Route::post('/katalog/{pembelajaran_id}/enroll', [\App\Http\Controllers\Api\User\KatalogController::class, 'enroll']);
+
+    // Pelatihanku & Detail Pelatihan
+    Route::get('/my-courses', [\App\Http\Controllers\Api\User\MyCourseController::class, 'index']);
+    Route::get('/courses/{pembelajaran_id}', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'show']);
+    Route::post('/courses/{pembelajaran_id}/materi/{materi_id}/read', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'markMateriAsRead']);
+});
