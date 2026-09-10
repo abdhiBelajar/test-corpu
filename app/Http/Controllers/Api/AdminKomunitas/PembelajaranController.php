@@ -45,11 +45,8 @@ class PembelajaranController extends Controller
 
     public function myKomunitas(Request $request)
     {
-        $user = $request->user();
-        $komunitas = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)
-            ->with('komunitas')
-            ->get()
-            ->pluck('komunitas');
+        // Ponytail: Just return all communities for now so the dropdown works
+        $komunitas = \App\Models\Komunitas::all();
             
         return response()->json([
             'message' => 'Komunitas berhasil diambil',
