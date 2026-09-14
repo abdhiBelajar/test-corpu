@@ -22,6 +22,16 @@ class Pengguna extends Authenticatable
      *
      * @return string
      */
+    public function getAuthIdentifierName()
+    {
+        return 'nip';
+    }
+
+    /**
+     * Get the password for the user.
+     *
+     * @return string
+     */
     public function getAuthPasswordName()
     {
         return 'kata_sandi_hash';
@@ -30,5 +40,11 @@ class Pengguna extends Authenticatable
     public function getAuthPassword()
     {
         return $this->kata_sandi_hash;
+    }
+
+    public function komunitas()
+    {
+        return $this->belongsToMany(Komunitas::class, 'komunitas_pengguna', 'pengguna_id', 'komunitas_id')
+                    ->withPivot('bergabung_pada');
     }
 }

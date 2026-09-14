@@ -105,4 +105,8 @@ Route::middleware(['auth:sanctum', 'role:peserta'])->prefix('user')->group(funct
 
     // Pusat Bantuan
     Route::post('/bantuan/tiket', [\App\Http\Controllers\Api\User\BantuanController::class, 'submitTiket']);
+
+    // Komunitas
+    Route::get('/komunitas', [\App\Http\Controllers\Api\User\KomunitasController::class, 'index']);
+    Route::post('/komunitas/{id}/join', [\App\Http\Controllers\Api\User\KomunitasController::class, 'join']);
 });

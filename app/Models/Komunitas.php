@@ -32,4 +32,10 @@ class Komunitas extends Model
     {
         return $this->hasMany(AdminKomunitas::class, 'komunitas_id', 'komunitas_id');
     }
+
+    public function anggota()
+    {
+        return $this->belongsToMany(Pengguna::class, 'komunitas_pengguna', 'komunitas_id', 'pengguna_id')
+                    ->withPivot('bergabung_pada');
+    }
 }

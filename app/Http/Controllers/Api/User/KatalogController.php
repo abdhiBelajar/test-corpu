@@ -15,10 +15,14 @@ class KatalogController extends Controller
         
         $query = Pembelajaran::where('status', 'dipublikasikan')
             ->withCount('modul')
-            ->with('jp');
+            ->with('pembelajaranJp');
 
         if ($request->has('kategori') && $request->kategori !== 'Semua Kategori') {
             $query->where('kategori', $request->kategori);
+        }
+
+        if ($request->has('komunitas_id') && !empty($request->komunitas_id)) {
+            $query->where('komunitas_id', $request->komunitas_id);
         }
 
         if ($request->has('search') && !empty($request->search)) {
@@ -41,13 +45,14 @@ class KatalogController extends Controller
         $enrolledIds = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)->pluck('pembelajaran_id')->toArray();
 
         $items = $pembelajaran->getCollection()->map(function ($item) use ($enrolledIds) {
+            $jp = $item->pembelajaranJp->first();
             return [
                 'id' => $item->pembelajaran_id,
                 'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop', // placeholder
                 'category' => $item->kategori ?? 'Lainnya',
                 'title' => $item->judul_pembelajaran,
                 'description' => $item->deskripsi,
-                'jpl' => $item->jp->jp_final ?? 0,
+                'jpl' => $jp ? $jp->jp_final : 0,
                 'modules' => $item->modul_count,
                 'isEnrolled' => in_array($item->pembelajaran_id, $enrolledIds)
             ];
