@@ -29,7 +29,7 @@ class PostTestController extends Controller
             return response()->json(['message' => 'Anda harus menyelesaikan semua materi terlebih dahulu'], 400);
         }
 
-        $postTest = PostTest::with('soal')->where('pembelajaran_id', $id)->first();
+        $postTest = PostTest::with('soalPostTest')->where('pembelajaran_id', $id)->first();
 
         if (!$postTest) {
             return response()->json(['message' => 'Post Test tidak tersedia untuk pelatihan ini'], 404);
@@ -49,11 +49,12 @@ class PostTestController extends Controller
         }
 
         // Format soal untuk dikirim
-        $soal = $postTest->soal->map(function($s) {
+        $soal = $postTest->soalPostTest->map(function($s) {
+            $pilihan = is_string($s->pilihan_jawaban_json) ? json_decode($s->pilihan_jawaban_json, true) : $s->pilihan_jawaban_json;
             return [
                 'soal_post_test_id' => $s->soal_post_test_id,
                 'teks_soal' => $s->teks_soal,
-                'pilihan_jawaban' => $s->pilihan_jawaban_json
+                'pilihan_jawaban' => $pilihan
             ];
         });
 
@@ -65,6 +66,7 @@ class PostTestController extends Controller
             'message' => 'Soal Post Test berhasil diambil',
             'data' => [
                 'post_test_id' => $postTest->post_test_id,
+                'judul_pembelajaran' => $postTest->pembelajaran->judul_pembelajaran,
                 'nilai_kelulusan' => $postTest->nilai_kelulusan,
                 'durasi_menit' => $postTest->durasi_menit,
                 'percobaan_sekarang' => $percobaanKe + 1,
@@ -91,7 +93,7 @@ class PostTestController extends Controller
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
         }
 
-        $postTest = PostTest::with('soal')->where('pembelajaran_id', $id)->first();
+        $postTest = PostTest::with('soalPostTest')->where('pembelajaran_id', $id)->first();
 
         if (!$postTest) {
             return response()->json(['message' => 'Post Test tidak ditemukan'], 404);
@@ -99,7 +101,7 @@ class PostTestController extends Controller
 
         // Hitung nilai
         $jawabanUser = $request->jawaban; // array of ['soal_post_test_id' => x, 'jawaban' => 'A']
-        $soalList = $postTest->soal->keyBy('soal_post_test_id');
+        $soalList = $postTest->soalPostTest->keyBy('soal_post_test_id');
 
         $totalBobot = 0;
         $skorDidapat = 0;
@@ -119,7 +121,7 @@ class PostTestController extends Controller
         }
 
         // Calculate final score based on total questions bobot if some are missed
-        $allBobot = $postTest->soal->sum('bobot_nilai');
+        $allBobot = $postTest->soalPostTest->sum('bobot_nilai');
         $nilaiAkhir = $allBobot > 0 ? ($skorDidapat / $allBobot) * 100 : 0;
         $apakahLulus = $nilaiAkhir >= $postTest->nilai_kelulusan;
 
@@ -134,8 +136,8 @@ class PostTestController extends Controller
             'percobaan_ke' => $percobaanKe,
             'nilai' => $nilaiAkhir,
             'apakah_lulus' => $apakahLulus,
-            'jawaban_peserta_json' => json_encode($jawabanUser),
-            'snapshot_soal_json' => json_encode($postTest->soal->toArray())
+            'jawaban_peserta_json' => $jawabanUser,
+            'snapshot_soal_json' => $postTest->soalPostTest->toArray()
         ]);
 
         if ($apakahLulus) {
@@ -152,7 +154,7 @@ class PostTestController extends Controller
                 'nama_lengkap_snapshot' => $user->nama_lengkap,
                 'nip_snapshot' => $user->nip,
                 'tanggal_terbit' => now(),
-                'tautan_berkas' => null
+                'tautan_berkas' => '-'
             ]);
         } else {
             // Jika tidak lulus dan sudah max percobaan
@@ -163,15 +165,33 @@ class PostTestController extends Controller
             }
         }
 
+        $pembelajaran = $postTest->pembelajaran;
+        $jpDet = $pembelajaran->pembelajaranJp->first();
+        $jpl = $jpDet ? $jpDet->jp_final : 0;
+
+        $responseData = [
+            'nilai' => $nilaiAkhir,
+            'apakah_lulus' => $apakahLulus,
+            'percobaan_ke' => $percobaanKe,
+            'maks_percobaan' => $postTest->maks_percobaan,
+            'sisa_percobaan' => max(0, $postTest->maks_percobaan - $percobaanKe)
+        ];
+
+        if ($apakahLulus) {
+            $sertifikatModel = Sertifikat::where('pendaftaran_id', $pendaftaran->pendaftaran_id)->first();
+            $responseData['sertifikat'] = [
+                'sertifikat_id' => $sertifikatModel->sertifikat_id ?? null,
+                'judul_pembelajaran' => $pembelajaran->judul_pembelajaran,
+                'nama_peserta' => $user->nama_lengkap,
+                'nip' => $user->nip,
+                'jpl' => $jpl,
+                'tanggal' => now()->translatedFormat('d F Y')
+            ];
+        }
+
         return response()->json([
             'message' => 'Post Test berhasil disubmit',
-            'data' => [
-                'nilai' => $nilaiAkhir,
-                'apakah_lulus' => $apakahLulus,
-                'percobaan_ke' => $percobaanKe,
-                'maks_percobaan' => $postTest->maks_percobaan,
-                'sisa_percobaan' => max(0, $postTest->maks_percobaan - $percobaanKe)
-            ]
+            'data' => $responseData
         ]);
     }
 }

@@ -16,7 +16,7 @@ class MyCourseController extends Controller
 
         $query = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)
             ->with(['pembelajaran' => function($q) {
-                $q->withCount('modul')->with('jp');
+                $q->withCount('modul')->with('pembelajaranJp');
             }]);
 
         if ($status !== 'all') {
@@ -25,7 +25,7 @@ class MyCourseController extends Controller
             // 'selesai' => 'selesai', 'lulus'
             // 'menunggu' => 'menunggu_post_test'
             if ($status === 'berjalan') {
-                $query->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan']);
+                $query->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan', 'menunggu_post_test']);
             } elseif ($status === 'selesai') {
                 $query->whereIn('status_pendaftaran', ['selesai', 'lulus']);
             } elseif ($status === 'menunggu') {
@@ -51,6 +51,7 @@ class MyCourseController extends Controller
         }
 
         $items = $pendaftaran->map(function($item) {
+            $jp = $item->pembelajaran->pembelajaranJp->first();
             return [
                 'pendaftaran_id' => $item->pendaftaran_id,
                 'pembelajaran_id' => $item->pembelajaran_id,
@@ -58,7 +59,7 @@ class MyCourseController extends Controller
                 'category' => $item->pembelajaran->kategori ?? 'Lainnya',
                 'title' => $item->pembelajaran->judul_pembelajaran,
                 'description' => $item->pembelajaran->deskripsi,
-                'jpl' => $item->pembelajaran->jp->jp_final ?? 0,
+                'jpl' => $jp ? $jp->jp_final : 0,
                 'modules' => $item->pembelajaran->modul_count,
                 'progress' => $item->persentase_progres,
                 'status' => $item->status_pendaftaran,
@@ -70,7 +71,7 @@ class MyCourseController extends Controller
         $allUserPendaftaran = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)->get();
         $stats = [
             'total' => $allUserPendaftaran->count(),
-            'berjalan' => $allUserPendaftaran->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan'])->count(),
+            'berjalan' => $allUserPendaftaran->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan', 'menunggu_post_test'])->count(),
             'menunggu' => $allUserPendaftaran->where('status_pendaftaran', 'menunggu_post_test')->count(),
             'selesai' => $allUserPendaftaran->whereIn('status_pendaftaran', ['selesai', 'lulus'])->count(),
         ];

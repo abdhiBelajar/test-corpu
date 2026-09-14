@@ -95,13 +95,20 @@ Route::middleware(['auth:sanctum', 'role:peserta'])->prefix('user')->group(funct
 
     // Pelatihanku & Detail Pelatihan
     Route::get('/my-courses', [\App\Http\Controllers\Api\User\MyCourseController::class, 'index']);
-    Route::get('/courses/{pembelajaran_id}', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'show']);
+    Route::get('/courses/{id}', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'show']);
+    Route::post('/courses/{id}/mark-read', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'markRead']);
+    Route::post('/courses/{id}/ulasan', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'submitUlasan']);
     Route::post('/courses/{pembelajaran_id}/materi/{materi_id}/read', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'markMateriAsRead']);
 
-    // Post Test & Sertifikat
+    // Post Test, Kuis & Sertifikat
+    Route::get('/courses/{pembelajaran_id}/modul/{modul_id}/kuis/{kuis_id}', [\App\Http\Controllers\Api\User\KuisController::class, 'show']);
+    Route::post('/courses/{pembelajaran_id}/modul/{modul_id}/kuis/{kuis_id}/submit', [\App\Http\Controllers\Api\User\KuisController::class, 'submit']);
+
     Route::get('/courses/{pembelajaran_id}/post-test', [\App\Http\Controllers\Api\User\PostTestController::class, 'show']);
     Route::post('/courses/{pembelajaran_id}/post-test/submit', [\App\Http\Controllers\Api\User\PostTestController::class, 'submit']);
     Route::get('/certificates', [\App\Http\Controllers\Api\User\SertifikatController::class, 'index']);
+    Route::get('/certificates/{id}/download', [\App\Http\Controllers\Api\User\SertifikatController::class, 'download']);
+    Route::get('/courses/{pembelajaran_id}/certificate/download', [\App\Http\Controllers\Api\User\SertifikatController::class, 'downloadByCourse']);
 
     // Pusat Bantuan
     Route::post('/bantuan/tiket', [\App\Http\Controllers\Api\User\BantuanController::class, 'submitTiket']);

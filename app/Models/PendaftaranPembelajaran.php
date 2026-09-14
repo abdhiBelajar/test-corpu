@@ -33,4 +33,9 @@ class PendaftaranPembelajaran extends Model
     {
         return $this->hasMany(ProgresMateri::class, 'pendaftaran_id', 'pendaftaran_id');
     }
+
+    public function sertifikat()
+    {
+        return $this->hasOne(Sertifikat::class, 'pendaftaran_id', 'pendaftaran_id');
+    }
 }

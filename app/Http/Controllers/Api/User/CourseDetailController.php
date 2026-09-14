@@ -8,6 +8,7 @@ use App\Models\Pembelajaran;
 use App\Models\PendaftaranPembelajaran;
 use App\Models\ProgresMateri;
 use App\Models\Materi;
+use App\Models\UlasanPembelajaran;
 
 class CourseDetailController extends Controller
 {
@@ -21,7 +22,7 @@ class CourseDetailController extends Controller
                 $q->orderBy('urutan', 'asc')->with(['materi', 'kuis']);
             },
             'postTest',
-            'jp'
+            'pembelajaranJp'
         ])->findOrFail($id);
 
         // Cek pendaftaran
@@ -37,16 +38,17 @@ class CourseDetailController extends Controller
         }
 
         // Map data agar mudah dikonsumsi frontend
+        $jpDet = $pembelajaran->pembelajaranJp->first();
         $data = [
             'pembelajaran_id' => $pembelajaran->pembelajaran_id,
             'judul' => $pembelajaran->judul_pembelajaran,
             'deskripsi' => $pembelajaran->deskripsi,
             'kategori' => $pembelajaran->kategori,
-            'jpl' => $pembelajaran->jp->jp_final ?? 0,
+            'jpl' => $jpDet ? $jpDet->jp_final : 0,
             'is_enrolled' => $pendaftaran ? true : false,
             'status_pendaftaran' => $pendaftaran->status_pendaftaran ?? null,
             'progress' => $pendaftaran->persentase_progres ?? 0,
-            'modul' => $pembelajaran->modul->map(function ($m) use ($progresMateri) {
+            'modul' => $pembelajaran->modul->map(function ($m) use ($progresMateri, $pendaftaran) {
                 return [
                     'modul_id' => $m->modul_id,
                     'judul' => $m->judul_modul,
@@ -64,7 +66,11 @@ class CourseDetailController extends Controller
                     'kuis' => $m->kuis ? [
                         'kuis_id' => $m->kuis->kuis_id,
                         'judul' => $m->kuis->judul_kuis,
-                        'durasi' => $m->kuis->durasi_menit
+                        'durasi' => $m->kuis->durasi_menit,
+                        'is_completed' => $pendaftaran ? \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                            ->where('kuis_id', $m->kuis->kuis_id)
+                            ->where('apakah_lulus', true)
+                            ->exists() : false
                     ] : null
                 ];
             }),
@@ -106,8 +112,12 @@ class CourseDetailController extends Controller
         );
 
         // Hitung ulang persentase progres
-        // Total materi wajib dalam pembelajaran ini
+        // Total materi dan kuis dalam pembelajaran ini
         $totalMateri = Materi::whereHas('modul', function($q) use ($id) {
+            $q->where('pembelajaran_id', $id);
+        })->count();
+
+        $totalKuis = \App\Models\Kuis::whereHas('modul', function($q) use ($id) {
             $q->where('pembelajaran_id', $id);
         })->count();
 
@@ -115,7 +125,15 @@ class CourseDetailController extends Controller
             ->where('apakah_selesai', true)
             ->count();
 
-        $persentase = $totalMateri > 0 ? round(($materiSelesai / $totalMateri) * 100) : 0;
+        $kuisLulus = \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+            ->where('apakah_lulus', true)
+            ->distinct('kuis_id')
+            ->count('kuis_id');
+
+        $totalItem = $totalMateri + $totalKuis;
+        $itemSelesai = $materiSelesai + $kuisLulus;
+
+        $persentase = $totalItem > 0 ? round(($itemSelesai / $totalItem) * 100) : 0;
 
         $pendaftaran->persentase_progres = $persentase;
 
@@ -135,5 +153,37 @@ class CourseDetailController extends Controller
                 'status_pendaftaran' => $pendaftaran->status_pendaftaran
             ]
         ]);
+    }
+
+    public function submitUlasan(Request $request, $id)
+    {
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'ulasan' => 'required|string|max:1000'
+        ]);
+
+        $user = $request->user();
+
+        $pendaftaran = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)
+            ->where('pembelajaran_id', $id)
+            ->first();
+
+        if (!$pendaftaran) {
+            return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
+        }
+
+        // Cek apakah sudah pernah mengirim ulasan
+        $existing = UlasanPembelajaran::where('pendaftaran_id', $pendaftaran->pendaftaran_id)->first();
+        if ($existing) {
+            return response()->json(['message' => 'Anda sudah memberikan ulasan untuk pelatihan ini'], 400);
+        }
+
+        UlasanPembelajaran::create([
+            'pendaftaran_id' => $pendaftaran->pendaftaran_id,
+            'skor_rating' => $request->rating,
+            'teks_ulasan' => $request->ulasan
+        ]);
+
+        return response()->json(['message' => 'Ulasan berhasil dikirim']);
     }
 }

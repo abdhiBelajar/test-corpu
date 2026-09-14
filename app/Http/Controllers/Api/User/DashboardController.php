@@ -19,7 +19,7 @@ class DashboardController extends Controller
         // Semua pendaftaran user ini
         $pendaftaran = PendaftaranPembelajaran::where('pengguna_id', $penggunaId)
             ->with(['pembelajaran' => function($q) {
-                $q->withCount('modul')->with('jp');
+                $q->withCount('modul')->with('pembelajaranJp');
             }])
             ->get();
 
@@ -39,13 +39,14 @@ class DashboardController extends Controller
         $currentCourseReg = PendaftaranPembelajaran::where('pengguna_id', $penggunaId)
             ->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan'])
             ->with(['pembelajaran' => function($q) {
-                $q->withCount('modul')->with('jp');
+                $q->withCount('modul')->with('pembelajaranJp');
             }])
             ->orderBy('terdaftar_pada', 'desc')
             ->first();
 
         $currentCourse = null;
         if ($currentCourseReg && $currentCourseReg->pembelajaran) {
+            $jpCurrent = $currentCourseReg->pembelajaran->pembelajaranJp->first();
             $currentCourse = [
                 'pendaftaran_id' => $currentCourseReg->pendaftaran_id,
                 'pembelajaran_id' => $currentCourseReg->pembelajaran->pembelajaran_id,
@@ -53,7 +54,7 @@ class DashboardController extends Controller
                 'kategori' => $currentCourseReg->pembelajaran->kategori,
                 'progress' => $currentCourseReg->persentase_progres,
                 'total_modul' => $currentCourseReg->pembelajaran->modul_count,
-                'jpl' => $currentCourseReg->pembelajaran->jp->jp_final ?? 0,
+                'jpl' => $jpCurrent ? $jpCurrent->jp_final : 0,
                 'next_module' => 'Lanjutkan ke Modul', // This could be dynamically resolved if needed
                 'image' => 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=2070&auto=format&fit=crop'
             ];
@@ -64,15 +65,16 @@ class DashboardController extends Controller
         $rekomendasi = Pembelajaran::where('status', 'dipublikasikan')
             ->whereNotIn('pembelajaran_id', $enrolledIds)
             ->withCount('modul')
-            ->with('jp')
+            ->with('pembelajaranJp')
             ->latest('dipublikasikan_pada')
             ->take(3)
             ->get()
             ->map(function ($c) {
+                $jpRek = $c->pembelajaranJp->first();
                 return [
                     'pembelajaran_id' => $c->pembelajaran_id,
                     'judul' => $c->judul_pembelajaran,
-                    'jpl' => $c->jp->jp_final ?? 0,
+                    'jpl' => $jpRek ? $jpRek->jp_final : 0,
                     'total_modul' => $c->modul_count,
                     'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop'
                 ];
