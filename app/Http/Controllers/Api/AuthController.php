@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use App\Models\Pengguna;
 use App\Services\SimpegApiService;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\OtpMail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -18,73 +21,195 @@ class AuthController extends Controller
         $this->simpegApi = $simpegApi;
     }
 
+    /**
+     * Mengirim kode OTP ke Gmail pengguna untuk verifikasi saat registrasi
+     */
+    public function registerRequestOtp(Request $request)
+    {
+        $request->validate([
+            'nip' => 'required|string',
+            'email' => [
+                'required',
+                'email',
+                'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/i',
+            ],
+        ], [
+            'email.regex' => 'Alamat email wajib menggunakan domain @gmail.com.',
+        ]);
+
+        $nip = trim($request->nip);
+        $email = strtolower(trim($request->email));
+
+        // 1. Cek apakah NIP sudah terdaftar di sistem
+        if (Pengguna::where('nip', $nip)->exists()) {
+            return response()->json([
+                'message' => 'NIP sudah terdaftar dalam sistem. Silakan langsung masuk ke akun Anda.'
+            ], 422);
+        }
+
+        // 2. Cek apakah Email sudah digunakan oleh akun lain
+        if (Pengguna::where('email', $email)->exists()) {
+            return response()->json([
+                'message' => 'Email ini sudah digunakan oleh akun lain. Gunakan email lain.'
+            ], 422);
+        }
+
+        // 3. Validasi keberadaan NIP di SIMPEG
+        $pegawai = $this->simpegApi->getPegawaiByNip($nip);
+        if (!$pegawai) {
+            return response()->json([
+                'message' => 'NIP tidak ditemukan di sistem kepegawaian SIMPEG. Pastikan NIP Anda sudah terdaftar sebagai ASN.'
+            ], 404);
+        }
+
+        // 4. Generate OTP 6 digit
+        $otp = (string) rand(100000, 999999);
+        Cache::put('otp_register_' . $nip, [
+            'otp' => $otp,
+            'email' => $email,
+        ], now()->addMinutes(10));
+
+        // 5. Kirim email OTP
+        try {
+            Mail::to($email)->send(new OtpMail($otp));
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal mengirim email OTP. Pastikan email valid dan konfigurasi email server aktif.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Kode OTP berhasil dikirim ke ' . $email . '. Silakan periksa kotak masuk Gmail Anda.',
+            'pegawai' => [
+                'nama_lengkap' => $pegawai['nama_lengkap'],
+                'unit_kerja' => $pegawai['unit_kerja']
+            ]
+        ]);
+    }
+
+    /**
+     * Memvalidasi OTP dan membuat akun pengguna baru
+     */
+    public function register(Request $request)
+    {
+        $request->validate([
+            'nip' => 'required|string',
+            'email' => 'required|email',
+            'otp' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'password.min' => 'Kata sandi minimal 8 karakter.',
+            'password.confirmed' => 'Konfirmasi kata sandi tidak cocok.',
+        ]);
+
+        $nip = trim($request->nip);
+        $email = strtolower(trim($request->email));
+        $otp = trim($request->otp);
+
+        // 1. Verifikasi OTP dari Cache
+        $cachedData = Cache::get('otp_register_' . $nip);
+        if (!$cachedData || $cachedData['otp'] !== $otp || $cachedData['email'] !== $email) {
+            return response()->json([
+                'message' => 'Kode OTP tidak valid atau sudah kedaluwarsa. Silakan minta kode OTP baru.'
+            ], 400);
+        }
+
+        // 2. Cek apakah NIP atau Email sudah ada di database
+        if (Pengguna::where('nip', $nip)->exists()) {
+            return response()->json([
+                'message' => 'NIP sudah terdaftar.'
+            ], 422);
+        }
+        if (Pengguna::where('email', $email)->exists()) {
+            return response()->json([
+                'message' => 'Email sudah digunakan akun lain.'
+            ], 422);
+        }
+
+        // 3. Ambil data pegawai dari SIMPEG
+        $pegawai = $this->simpegApi->getPegawaiByNip($nip);
+        if (!$pegawai) {
+            return response()->json([
+                'message' => 'Data pegawai tidak ditemukan di SIMPEG.'
+            ], 404);
+        }
+
+        // 4. Buat akun baru di tabel pengguna
+        $pengguna = Pengguna::create([
+            'nama_lengkap' => $pegawai['nama_lengkap'],
+            'nip' => $nip,
+            'email' => $email,
+            'kata_sandi_hash' => Hash::make($request->password),
+            'peran' => 'peserta',
+            'jabatan' => $pegawai['jabatan'] ?? null,
+            'rumpun_jabatan' => $pegawai['rumpun_jabatan'] ?? null,
+            'unit_kerja' => $pegawai['unit_kerja'] ?? null,
+            'status' => 'aktif',
+        ]);
+
+        // Hapus OTP dari cache
+        Cache::forget('otp_register_' . $nip);
+
+        // Terbitkan token Sanctum
+        $token = $pengguna->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Registrasi berhasil! Akun Anda telah aktif.',
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $pengguna
+        ], 201);
+    }
+
+    /**
+     * Autentikasi Pengguna (Login)
+     * Menggunakan NIP (atau Email) dan Password kustom yang telah dibuat
+     */
     public function login(Request $request)
     {
         $request->validate([
-             'nip' => 'required|string',
+            'nip' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $nip = $request->nip;
+        $identifier = trim($request->nip);
         $password = $request->password;
 
-        $pengguna = Pengguna::where('nip', $nip)->first();
+        // Cari akun berdasarkan NIP atau Email
+        $pengguna = Pengguna::where('nip', $identifier)
+            ->orWhere('email', $identifier)
+            ->first();
 
         if (!$pengguna) {
-            // Cek SIMPEG jika NIP belum ada di tabel pengguna
-            $pegawai = $this->simpegApi->getPegawaiByNip($nip);
+            return response()->json([
+                'message' => 'Akun belum terdaftar. Silakan lakukan registrasi terlebih dahulu.'
+            ], 404);
+        }
 
-            if (!$pegawai) {
-                return response()->json([
-                    'message' => 'NIP tidak ditemukan di sistem SIMPEG.'
-                ], 401);
-            }
+        // Cek kecocokan kata sandi
+        if (!Hash::check($password, $pengguna->kata_sandi_hash)) {
+            return response()->json([
+                'message' => 'Kata sandi salah. Silakan periksa kembali.'
+            ], 401);
+        }
 
-            $defaultPassword = substr($nip, -8);
+        // Cek apakah akun aktif
+        if ($pengguna->status !== 'aktif') {
+            return response()->json([
+                'message' => 'Akun Anda sedang dinonaktifkan. Hubungi administrator BKPSDM.'
+            ], 403);
+        }
 
-            // Default password logic for first time login
-            if ($password !== $defaultPassword) {
-                return response()->json([
-                    'message' => 'NIP ditemukan di SIMPEG, tetapi password default salah. Gunakan 8 angka terakhir NIP Anda untuk login pertama kali.'
-                ], 401);
-            }
-
-            // Create user
-            $pengguna = Pengguna::create([
+        // Sinkronisasi data dengan SIMPEG agar selalu mutakhir
+        $pegawai = $this->simpegApi->getPegawaiByNip($pengguna->nip);
+        if ($pegawai) {
+            $pengguna->update([
                 'nama_lengkap' => $pegawai['nama_lengkap'],
-                'nip' => $nip,
-                'kata_sandi_hash' => Hash::make($password),
-                'peran' => 'peserta', // Default
                 'jabatan' => $pegawai['jabatan'],
                 'rumpun_jabatan' => $pegawai['rumpun_jabatan'],
                 'unit_kerja' => $pegawai['unit_kerja'],
-                'status' => 'aktif',
             ]);
-        } else {
-            // User sudah ada, cek password
-            if (!Hash::check($password, $pengguna->kata_sandi_hash)) {
-                return response()->json([
-                    'message' => 'Password salah.'
-                ], 401);
-            }
-
-            // Cek apakah akun aktif
-            if ($pengguna->status !== 'aktif') {
-                return response()->json([
-                    'message' => 'Akun Anda tidak aktif.'
-                ], 403);
-            }
-
-            // Sinkronisasi data dengan SIMPEG agar selalu mutakhir
-            $pegawai = $this->simpegApi->getPegawaiByNip($nip);
-            if ($pegawai) {
-                $pengguna->update([
-                    'nama_lengkap' => $pegawai['nama_lengkap'],
-                    'jabatan' => $pegawai['jabatan'],
-                    'rumpun_jabatan' => $pegawai['rumpun_jabatan'],
-                    'unit_kerja' => $pegawai['unit_kerja'],
-                ]);
-            }
         }
 
         // Generate token Sanctum

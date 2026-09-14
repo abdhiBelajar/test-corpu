@@ -48,6 +48,18 @@ class SimpegApiService
                 'rumpun_jabatan' => 'JPT',
                 'unit_kerja' => 'Sekretariat Daerah',
             ],
+            '199805122022031001' => [
+                'nama_lengkap' => 'Kadek Dwi Permana, S.Pd',
+                'jabatan' => 'Guru Ahli Pertama',
+                'rumpun_jabatan' => 'JF',
+                'unit_kerja' => 'Dinas Pendidikan, Pemuda, dan Olahraga',
+            ],
+            '199208152019032002' => [
+                'nama_lengkap' => 'Luh Made Sukmawati, S.Tr.Keb',
+                'jabatan' => 'Bidan Terampil',
+                'rumpun_jabatan' => 'JF',
+                'unit_kerja' => 'Puskesmas Buleleng I',
+            ],
         ];
 
         return $mockData[$nip] ?? null;
