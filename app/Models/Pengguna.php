@@ -17,6 +17,11 @@ class Pengguna extends Authenticatable
     
     protected $guarded = [];
 
+    protected $hidden = [
+        'kata_sandi_hash',
+        'remember_token',
+    ];
+
     /**
      * Get the password for the user.
      *

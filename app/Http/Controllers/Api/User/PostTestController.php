@@ -93,105 +93,123 @@ class PostTestController extends Controller
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
         }
 
+        if ($pendaftaran->persentase_progres < 100) {
+            return response()->json(['message' => 'Anda harus menyelesaikan semua materi terlebih dahulu'], 400);
+        }
+
+        if ($pendaftaran->status_pendaftaran === 'lulus' || $pendaftaran->status_pendaftaran === 'selesai') {
+            return response()->json(['message' => 'Anda sudah lulus pelatihan ini'], 400);
+        }
+
         $postTest = PostTest::with('soalPostTest')->where('pembelajaran_id', $id)->first();
 
         if (!$postTest) {
             return response()->json(['message' => 'Post Test tidak ditemukan'], 404);
         }
 
-        // Hitung nilai
-        $jawabanUser = $request->jawaban; // array of ['soal_post_test_id' => x, 'jawaban' => 'A']
-        $soalList = $postTest->soalPostTest->keyBy('soal_post_test_id');
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pendaftaran, $postTest, $user, $id) {
+            // Lock pendaftaran untuk mencegah race condition
+            $lockedPendaftaran = PendaftaranPembelajaran::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->lockForUpdate()
+                ->first();
 
-        $totalBobot = 0;
-        $skorDidapat = 0;
+            if ($lockedPendaftaran->status_pendaftaran === 'lulus' || $lockedPendaftaran->status_pendaftaran === 'selesai') {
+                return response()->json(['message' => 'Anda sudah lulus pelatihan ini'], 400);
+            }
 
-        foreach ($jawabanUser as $j) {
-            $soalId = $j['soal_post_test_id'] ?? null;
-            $jawaban = $j['jawaban'] ?? null;
+            // Hitung percobaan dengan lock
+            $percobaanCount = RiwayatPostTest::where('pendaftaran_id', $lockedPendaftaran->pendaftaran_id)
+                ->where('post_test_id', $postTest->post_test_id)
+                ->lockForUpdate()
+                ->count();
 
-            if ($soalId && isset($soalList[$soalId])) {
-                $s = $soalList[$soalId];
-                $totalBobot += $s->bobot_nilai;
+            if ($percobaanCount >= $postTest->maks_percobaan) {
+                return response()->json(['message' => 'Anda telah mencapai batas maksimal percobaan Post Test (' . $postTest->maks_percobaan . ' kali)'], 400);
+            }
 
-                if ($s->kunci_jawaban === $jawaban) {
-                    $skorDidapat += $s->bobot_nilai;
+            $percobaanKe = $percobaanCount + 1;
+
+            // Hitung nilai murni server-side
+            $jawabanUser = $request->jawaban;
+            $soalList = $postTest->soalPostTest->keyBy('soal_post_test_id');
+
+            $totalBobot = 0;
+            $skorDidapat = 0;
+
+            foreach ($jawabanUser as $j) {
+                $soalId = $j['soal_post_test_id'] ?? null;
+                $jawaban = $j['jawaban'] ?? null;
+
+                if ($soalId && isset($soalList[$soalId])) {
+                    $s = $soalList[$soalId];
+                    $totalBobot += $s->bobot_nilai;
+
+                    if ($s->kunci_jawaban === $jawaban) {
+                        $skorDidapat += $s->bobot_nilai;
+                    }
                 }
             }
-        }
 
-        // Calculate final score based on total questions bobot if some are missed
-        $allBobot = $postTest->soalPostTest->sum('bobot_nilai');
-        $nilaiAkhir = $allBobot > 0 ? ($skorDidapat / $allBobot) * 100 : 0;
-        $apakahLulus = $nilaiAkhir >= $postTest->nilai_kelulusan;
+            $allBobot = $postTest->soalPostTest->sum('bobot_nilai');
+            $nilaiAkhir = $allBobot > 0 ? round(($skorDidapat / $allBobot) * 100, 2) : 0;
+            $apakahLulus = $nilaiAkhir >= $postTest->nilai_kelulusan;
 
-        $percobaanKe = RiwayatPostTest::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
-            ->where('post_test_id', $postTest->post_test_id)
-            ->count() + 1;
-
-        // Simpan Riwayat
-        $riwayat = RiwayatPostTest::create([
-            'post_test_id' => $postTest->post_test_id,
-            'pendaftaran_id' => $pendaftaran->pendaftaran_id,
-            'percobaan_ke' => $percobaanKe,
-            'nilai' => $nilaiAkhir,
-            'apakah_lulus' => $apakahLulus,
-            'jawaban_peserta_json' => $jawabanUser,
-            'snapshot_soal_json' => $postTest->soalPostTest->toArray()
-        ]);
-
-        if ($apakahLulus) {
-            // Update pendaftaran lulus
-            $pendaftaran->status_pendaftaran = 'lulus';
-            $pendaftaran->diselesaikan_pada = now();
-            $pendaftaran->save();
-
-            // Generate Sertifikat
-            Sertifikat::firstOrCreate([
-                'pendaftaran_id' => $pendaftaran->pendaftaran_id
-            ], [
-                'nomor_sertifikat' => 'CERT-' . strtoupper(uniqid()),
-                'nama_lengkap_snapshot' => $user->nama_lengkap,
-                'nip_snapshot' => $user->nip,
-                'tanggal_terbit' => now(),
-                'tautan_berkas' => '-'
+            // Simpan Riwayat
+            $riwayat = RiwayatPostTest::create([
+                'post_test_id' => $postTest->post_test_id,
+                'pendaftaran_id' => $lockedPendaftaran->pendaftaran_id,
+                'percobaan_ke' => $percobaanKe,
+                'nilai' => $nilaiAkhir,
+                'apakah_lulus' => $apakahLulus,
+                'jawaban_peserta_json' => $jawabanUser,
+                'snapshot_soal_json' => $postTest->soalPostTest->toArray()
             ]);
-        } else {
-            // Jika tidak lulus dan sudah max percobaan
-            if ($percobaanKe >= $postTest->maks_percobaan) {
-                // Biarkan status_pendaftaran atau ubah ke gagal?
-                // Kita asumsikan tetap 'menunggu_post_test' tapi dilarang ambil lagi
-                // Atau bisa status khusus. Sesuai request, biarkan saja.
+
+            if ($apakahLulus) {
+                $lockedPendaftaran->status_pendaftaran = 'lulus';
+                $lockedPendaftaran->diselesaikan_pada = now();
+                $lockedPendaftaran->save();
+
+                Sertifikat::firstOrCreate([
+                    'pendaftaran_id' => $lockedPendaftaran->pendaftaran_id
+                ], [
+                    'nomor_sertifikat' => 'CERT-' . strtoupper(uniqid()),
+                    'nama_lengkap_snapshot' => $user->nama_lengkap,
+                    'nip_snapshot' => $user->nip,
+                    'tanggal_terbit' => now(),
+                    'tautan_berkas' => '-'
+                ]);
             }
-        }
 
-        $pembelajaran = $postTest->pembelajaran;
-        $jpDet = $pembelajaran->pembelajaranJp->first();
-        $jpl = $jpDet ? $jpDet->jp_final : 0;
+            $pembelajaran = $postTest->pembelajaran;
+            $jpDet = $pembelajaran ? $pembelajaran->pembelajaranJp->first() : null;
+            $jpl = $jpDet ? $jpDet->jp_final : 0;
 
-        $responseData = [
-            'nilai' => $nilaiAkhir,
-            'apakah_lulus' => $apakahLulus,
-            'percobaan_ke' => $percobaanKe,
-            'maks_percobaan' => $postTest->maks_percobaan,
-            'sisa_percobaan' => max(0, $postTest->maks_percobaan - $percobaanKe)
-        ];
-
-        if ($apakahLulus) {
-            $sertifikatModel = Sertifikat::where('pendaftaran_id', $pendaftaran->pendaftaran_id)->first();
-            $responseData['sertifikat'] = [
-                'sertifikat_id' => $sertifikatModel->sertifikat_id ?? null,
-                'judul_pembelajaran' => $pembelajaran->judul_pembelajaran,
-                'nama_peserta' => $user->nama_lengkap,
-                'nip' => $user->nip,
-                'jpl' => $jpl,
-                'tanggal' => now()->translatedFormat('d F Y')
+            $responseData = [
+                'nilai' => $nilaiAkhir,
+                'apakah_lulus' => $apakahLulus,
+                'percobaan_ke' => $percobaanKe,
+                'maks_percobaan' => $postTest->maks_percobaan,
+                'sisa_percobaan' => max(0, $postTest->maks_percobaan - $percobaanKe)
             ];
-        }
 
-        return response()->json([
-            'message' => 'Post Test berhasil disubmit',
-            'data' => $responseData
-        ]);
+            if ($apakahLulus) {
+                $sertifikatModel = Sertifikat::where('pendaftaran_id', $lockedPendaftaran->pendaftaran_id)->first();
+                $responseData['sertifikat'] = [
+                    'sertifikat_id' => $sertifikatModel->sertifikat_id ?? null,
+                    'nomor_sertifikat' => $sertifikatModel->nomor_sertifikat ?? null,
+                    'judul_pembelajaran' => $pembelajaran ? $pembelajaran->judul_pembelajaran : '',
+                    'nama_peserta' => $user->nama_lengkap,
+                    'nip' => $user->nip,
+                    'jpl' => $jpl,
+                    'tanggal' => now()->translatedFormat('d F Y')
+                ];
+            }
+
+            return response()->json([
+                'message' => 'Post Test berhasil disubmit',
+                'data' => $responseData
+            ]);
+        });
     }
 }

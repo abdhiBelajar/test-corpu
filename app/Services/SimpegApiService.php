@@ -2,15 +2,61 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
 class SimpegApiService
 {
     /**
-     * Dummy function to get employee data by NIP from SIMPEG.
-     * In a real scenario, this would make an HTTP request to the SIMPEG API.
+     * Mengambil data pegawai berdasarkan NIP dari SIMPEG.
+     * Jika SIMPEG_API_URL dikonfigurasi, sistem akan melakukan request HTTP riil dengan timeout 5 detik.
+     * Jika tidak dikonfigurasi atau gagal koneksi, sistem menggunakan data lokal/mock sebagai fallback aman.
      */
     public function getPegawaiByNip($nip)
     {
-        // Mock data
+        $apiUrl = config('services.simpeg.url');
+        $apiKey = config('services.simpeg.key');
+
+        if (!empty($apiUrl)) {
+            try {
+                $response = Http::timeout(5)
+                    ->connectTimeout(3)
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                    ])
+                    ->get(rtrim($apiUrl, '/') . "/pegawai/{$nip}");
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    return [
+                        'nama_lengkap' => $data['nama_lengkap'] ?? $data['name'] ?? null,
+                        'jabatan' => $data['jabatan'] ?? null,
+                        'rumpun_jabatan' => $data['rumpun_jabatan'] ?? 'JF',
+                        'unit_kerja' => $data['unit_kerja'] ?? null,
+                    ];
+                }
+
+                if ($response->status() === 404) {
+                    return null;
+                }
+
+                Log::warning("SIMPEG API returned non-success HTTP status {$response->status()} for NIP: {$nip}");
+            } catch (\Throwable $e) {
+                Log::error("SIMPEG API connection failed for NIP {$nip}: " . $e->getMessage());
+                // Fallback ke data mock lokal jika terjadi kegagalan jaringan
+            }
+        }
+
+        // Mock data fallback untuk development / testing
+        return $this->getMockPegawai($nip);
+    }
+
+    /**
+     * Data mock pegawai lokal ASN Buleleng untuk pengujian dan development
+     */
+    protected function getMockPegawai($nip): ?array
+    {
         $mockData = [
             '198001012005011001' => [
                 'nama_lengkap' => 'Budi Santoso, S.Kom',
@@ -56,6 +102,12 @@ class SimpegApiService
             ],
             '199208152019032002' => [
                 'nama_lengkap' => 'Luh Made Sukmawati, S.Tr.Keb',
+                'jabatan' => 'Bidan Terampil',
+                'rumpun_jabatan' => 'JF',
+                'unit_kerja' => 'Puskesmas Buleleng I',
+            ],
+            '199208152019032006' => [
+                'nama_lengkap' => 'Aldi Jirr',
                 'jabatan' => 'Bidan Terampil',
                 'rumpun_jabatan' => 'JF',
                 'unit_kerja' => 'Puskesmas Buleleng I',

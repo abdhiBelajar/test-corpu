@@ -11,16 +11,16 @@ use App\Http\Controllers\Api\AdminBkpsdm\VerifikasiJpController;
 use App\Http\Controllers\Api\AdminBkpsdm\LaporanController;
 use App\Http\Controllers\Api\AdminBkpsdm\PusatBantuanController;
 
-Route::post('/register/request-otp', [AuthController::class, 'registerRequestOtp']);
+Route::post('/register/request-otp', [AuthController::class, 'registerRequestOtp'])->middleware('throttle:6,1');
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:6,1');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:6,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
-    Route::post('/change-password/request-otp', [AuthController::class, 'changePasswordRequestOtp']);
-    Route::post('/change-password/verify', [AuthController::class, 'changePasswordVerify']);
+    Route::post('/change-password/request-otp', [AuthController::class, 'changePasswordRequestOtp'])->middleware('throttle:6,1');
+    Route::post('/change-password/verify', [AuthController::class, 'changePasswordVerify'])->middleware('throttle:6,1');
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 

@@ -53,12 +53,12 @@ class CourseDetailController extends Controller
                     'modul_id' => $m->modul_id,
                     'judul' => $m->judul_modul,
                     'urutan' => $m->urutan,
-                    'materi' => $m->materi->map(function ($mat) use ($progresMateri) {
+                    'materi' => $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran) {
                         return [
                             'materi_id' => $mat->materi_id,
                             'judul' => $mat->judul_materi,
                             'tipe' => $mat->tipe_materi,
-                            'tautan' => $mat->tautan_atau_berkas,
+                            'tautan' => $pendaftaran ? $mat->tautan_atau_berkas : null,
                             'durasi' => $mat->durasi_menit,
                             'is_read' => isset($progresMateri[$mat->materi_id]) && $progresMateri[$mat->materi_id] ? true : false
                         ];

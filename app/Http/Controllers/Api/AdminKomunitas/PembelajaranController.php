@@ -261,6 +261,21 @@ class PembelajaranController extends Controller
             }
         }
 
+        // Cek apakah pembelajaran sudah memiliki Post-Test dan soal evaluasi
+        $postTest = \App\Models\PostTest::where('pembelajaran_id', $id)->first();
+        if (!$postTest) {
+            return response()->json([
+                'message' => 'Pembelajaran harus memiliki Post-Test sebelum diajukan.'
+            ], 400);
+        }
+
+        $hasSoalPostTest = \App\Models\SoalPostTest::where('post_test_id', $postTest->post_test_id)->exists();
+        if (!$hasSoalPostTest) {
+            return response()->json([
+                'message' => 'Post-Test pembelajaran belum memiliki soal evaluasi.'
+            ], 400);
+        }
+
         $pembelajaran->update($updateData);
 
         // Tambah/Update ke tabel ValidasiPembelajaran

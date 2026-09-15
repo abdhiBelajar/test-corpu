@@ -92,61 +92,79 @@ class KuisController extends Controller
             return response()->json(['message' => 'Kuis tidak ditemukan'], 404);
         }
 
-        // Hitung nilai
-        $jawabanUser = $request->jawaban; // array of ['soal_kuis_id' => x, 'jawaban' => 'A']
-        $soalList = $kuis->soalKuis->keyBy('soal_kuis_id');
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pendaftaran, $kuis, $id) {
+            $lockedPendaftaran = PendaftaranPembelajaran::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->lockForUpdate()
+                ->first();
 
-        $totalBobot = 0;
-        $skorDidapat = 0;
+            $percobaanCount = RiwayatKuis::where('pendaftaran_id', $lockedPendaftaran->pendaftaran_id)
+                ->where('kuis_id', $kuis->kuis_id)
+                ->lockForUpdate()
+                ->count();
 
-        foreach ($jawabanUser as $j) {
-            $soalId = $j['soal_kuis_id'] ?? null;
-            $jawaban = $j['jawaban'] ?? null;
+            $alreadyPassed = RiwayatKuis::where('pendaftaran_id', $lockedPendaftaran->pendaftaran_id)
+                ->where('kuis_id', $kuis->kuis_id)
+                ->where('apakah_lulus', true)
+                ->exists();
 
-            if ($soalId && isset($soalList[$soalId])) {
-                $s = $soalList[$soalId];
-                $totalBobot += $s->bobot_nilai;
+            if ($percobaanCount >= $kuis->maks_percobaan && !$alreadyPassed) {
+                return response()->json(['message' => 'Anda telah mencapai batas maksimal percobaan Kuis (' . $kuis->maks_percobaan . ' kali)'], 400);
+            }
 
-                if ($s->kunci_jawaban === $jawaban) {
-                    $skorDidapat += $s->bobot_nilai;
+            // Hitung nilai
+            $jawabanUser = $request->jawaban; // array of ['soal_kuis_id' => x, 'jawaban' => 'A']
+            $soalList = $kuis->soalKuis->keyBy('soal_kuis_id');
+
+            $totalBobot = 0;
+            $skorDidapat = 0;
+
+            foreach ($jawabanUser as $j) {
+                $soalId = $j['soal_kuis_id'] ?? null;
+                $jawaban = $j['jawaban'] ?? null;
+
+                if ($soalId && isset($soalList[$soalId])) {
+                    $s = $soalList[$soalId];
+                    $totalBobot += $s->bobot_nilai;
+
+                    if ($s->kunci_jawaban === $jawaban) {
+                        $skorDidapat += $s->bobot_nilai;
+                    }
                 }
             }
-        }
 
-        $allBobot = $kuis->soalKuis->sum('bobot_nilai');
-        $nilaiAkhir = $allBobot > 0 ? ($skorDidapat / $allBobot) * 100 : 0;
-        $apakahLulus = $nilaiAkhir >= $kuis->nilai_kelulusan;
+            $allBobot = $kuis->soalKuis->sum('bobot_nilai');
+            $nilaiAkhir = $allBobot > 0 ? round(($skorDidapat / $allBobot) * 100, 2) : 0;
+            $apakahLulus = $nilaiAkhir >= $kuis->nilai_kelulusan;
 
-        $percobaanKe = RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
-            ->where('kuis_id', $kuis->kuis_id)
-            ->count() + 1;
+            $percobaanKe = $percobaanCount + 1;
 
-        // Simpan Riwayat
-        $riwayat = RiwayatKuis::create([
-            'kuis_id' => $kuis->kuis_id,
-            'pendaftaran_id' => $pendaftaran->pendaftaran_id,
-            'percobaan_ke' => $percobaanKe,
-            'nilai' => $nilaiAkhir,
-            'apakah_lulus' => $apakahLulus,
-            'jawaban_peserta_json' => $jawabanUser,
-            'snapshot_soal_json' => $kuis->soalKuis->toArray()
-        ]);
-
-        if ($apakahLulus) {
-            // Update progress pembelajaran jika lulus kuis
-            $this->updateProgress($pendaftaran, $id);
-        }
-
-        return response()->json([
-            'message' => 'Kuis berhasil disubmit',
-            'data' => [
+            // Simpan Riwayat
+            $riwayat = RiwayatKuis::create([
+                'kuis_id' => $kuis->kuis_id,
+                'pendaftaran_id' => $lockedPendaftaran->pendaftaran_id,
+                'percobaan_ke' => $percobaanKe,
                 'nilai' => $nilaiAkhir,
                 'apakah_lulus' => $apakahLulus,
-                'percobaan_ke' => $percobaanKe,
-                'maks_percobaan' => $kuis->maks_percobaan,
-                'sisa_percobaan' => max(0, $kuis->maks_percobaan - $percobaanKe)
-            ]
-        ]);
+                'jawaban_peserta_json' => $jawabanUser,
+                'snapshot_soal_json' => $kuis->soalKuis->toArray()
+            ]);
+
+            if ($apakahLulus) {
+                // Update progress pembelajaran jika lulus kuis
+                $this->updateProgress($lockedPendaftaran, $id);
+            }
+
+            return response()->json([
+                'message' => 'Kuis berhasil disubmit',
+                'data' => [
+                    'nilai' => $nilaiAkhir,
+                    'apakah_lulus' => $apakahLulus,
+                    'percobaan_ke' => $percobaanKe,
+                    'maks_percobaan' => $kuis->maks_percobaan,
+                    'sisa_percobaan' => max(0, $kuis->maks_percobaan - $percobaanKe)
+                ]
+            ]);
+        });
     }
 
     private function updateProgress($pendaftaran, $id)
