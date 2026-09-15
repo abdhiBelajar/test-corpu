@@ -86,7 +86,7 @@ class PembelajaranController extends Controller
             'dirancang_oleh_pengguna_id' => $user->pengguna_id,
             'judul_pembelajaran' => $request->judul_pembelajaran,
             'deskripsi' => $request->deskripsi,
-            'kategori' => $request->kategori,
+            'kategori' => $request->kategori ?: 'Pengembangan Kompetensi',
             'capaian_pembelajaran' => $request->capaian_pembelajaran,
             'nama_narasumber' => $request->nama_narasumber,
             'nilai_kelulusan' => $request->nilai_kelulusan,
@@ -140,10 +140,6 @@ class PembelajaranController extends Controller
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Pembelajaran yang sudah dipublikasikan tidak dapat diubah.'], 400);
-        }
-
         $request->validate([
             'judul_pembelajaran' => 'sometimes|string|max:255',
             'deskripsi' => 'nullable|string',
@@ -163,8 +159,12 @@ class PembelajaranController extends Controller
             'nama_narasumber', 'nilai_kelulusan', 'ringkasan_materi', 'tanggal_mulai', 'tanggal_selesai'
         ]);
 
-        // Jika kursus berstatus ditolak, saat diedit/disimpan otomatis kembali menjadi draft
-        if ($pembelajaran->status === 'ditolak') {
+        if (array_key_exists('kategori', $updateData)) {
+            $updateData['kategori'] = $updateData['kategori'] ?: 'Pengembangan Kompetensi';
+        }
+
+        // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit/disimpan otomatis kembali menjadi draft
+        if ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->status === 'ditolak') {
             $updateData['status'] = 'draft';
         } elseif ($request->filled('status')) {
             $updateData['status'] = $request->status;
@@ -196,11 +196,25 @@ class PembelajaranController extends Controller
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        if ($pembelajaran->status !== 'draft') {
-            return response()->json(['message' => 'Hanya pembelajaran berstatus draft yang dapat dihapus.'], 400);
-        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($pembelajaran) {
+            // Hapus file surat pernyataan jika ada
+            if ($pembelajaran->surat_pernyataan_url) {
+                $filePath = str_replace('/storage/', '', $pembelajaran->surat_pernyataan_url);
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($filePath);
+            }
 
-        $pembelajaran->delete();
+            // Hapus file materi PDF jika ada
+            $modulIds = \App\Models\Modul::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->pluck('modul_id');
+            $materis = \App\Models\Materi::whereIn('modul_id', $modulIds)->where('tipe_materi', 'pdf')->get();
+            foreach ($materis as $materi) {
+                if ($materi->tautan_atau_berkas) {
+                    $materiFilePath = str_replace('/storage/', '', $materi->tautan_atau_berkas);
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($materiFilePath);
+                }
+            }
+
+            $pembelajaran->delete();
+        });
 
         return response()->json([
             'message' => 'Pembelajaran berhasil dihapus'
@@ -233,6 +247,10 @@ class PembelajaranController extends Controller
             'ringkasan_materi' => $request->ringkasan_materi ?: ($pembelajaran->ringkasan_materi ?: 'Ringkasan materi pembelajaran'),
             'status' => 'menunggu_approval'
         ];
+
+        if (empty($pembelajaran->kategori)) {
+            $updateData['kategori'] = 'Pengembangan Kompetensi';
+        }
 
         if ($request->hasFile('surat_pernyataan')) {
             $path = $request->file('surat_pernyataan')->store('surat_pernyataan', 'public');

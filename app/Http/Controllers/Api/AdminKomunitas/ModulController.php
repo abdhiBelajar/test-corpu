@@ -41,12 +41,13 @@ class ModulController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menambah modul ke pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
             'judul_modul' => 'required|string|max:255',
             'gambaran_umum' => 'nullable|string',
+            'deskripsi' => 'nullable|string',
             'evaluasi_deskripsi' => 'nullable|string',
             'urutan' => 'nullable|integer|min:1',
             'info_tatap_muka' => 'nullable|string',
@@ -55,10 +56,14 @@ class ModulController extends Controller
         $maxUrutan = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)->max('urutan') ?? 0;
         $urutan = $request->urutan ?? ($maxUrutan + 1);
 
+        $deskripsiValue = $request->filled('gambaran_umum') 
+            ? $request->gambaran_umum 
+            : ($request->filled('deskripsi') ? $request->deskripsi : ('Gambaran umum modul ' . $request->judul_modul));
+
         $modul = \App\Models\Modul::create([
             'pembelajaran_id' => $pembelajaran_id,
             'judul_modul' => $request->judul_modul,
-            'gambaran_umum' => $request->gambaran_umum ?: ('Gambaran umum modul ' . $request->judul_modul),
+            'gambaran_umum' => $deskripsiValue,
             'evaluasi_deskripsi' => $request->evaluasi_deskripsi ?: 'Evaluasi pemahaman modul',
             'urutan' => $urutan,
             'durasi_total_menit' => 0,
@@ -95,21 +100,28 @@ class ModulController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat mengubah modul pada pembelajaran yang sudah dipublikasikan.'], 400);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
             'judul_modul' => 'sometimes|string|max:255',
-            'gambaran_umum' => 'sometimes|string',
+            'gambaran_umum' => 'sometimes|string|nullable',
+            'deskripsi' => 'sometimes|string|nullable',
             'evaluasi_deskripsi' => 'nullable|string',
             'urutan' => 'sometimes|integer|min:1',
             'info_tatap_muka' => 'nullable|string',
         ]);
 
-        $modul->update($request->only([
+        $updateData = $request->only([
             'judul_modul', 'gambaran_umum', 'evaluasi_deskripsi', 'urutan', 'info_tatap_muka'
-        ]));
+        ]);
+
+        if ($request->has('deskripsi') && !$request->has('gambaran_umum')) {
+            $updateData['gambaran_umum'] = $request->deskripsi;
+        }
+
+        $modul->update($updateData);
 
         return response()->json([
             'message' => 'Modul berhasil diperbarui',
@@ -127,7 +139,7 @@ class ModulController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menghapus modul pada pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $modul->delete();

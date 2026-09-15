@@ -14,6 +14,18 @@ class Modul extends Model
     
     protected $guarded = [];
 
+    protected $appends = ['deskripsi'];
+
+    public function getDeskripsiAttribute()
+    {
+        return $this->attributes['gambaran_umum'] ?? null;
+    }
+
+    public function setDeskripsiAttribute($value)
+    {
+        $this->attributes['gambaran_umum'] = $value;
+    }
+
     public function pembelajaran()
     {
         return $this->belongsTo(Pembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');

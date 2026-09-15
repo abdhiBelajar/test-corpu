@@ -23,8 +23,8 @@ class PembelajaranJpController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat mengubah JP pada pembelajaran yang sudah dipublikasikan.'], 400);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([

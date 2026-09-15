@@ -37,8 +37,8 @@ class PostTestController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menambah post test ke pembelajaran yang sudah dipublikasikan.'], 400);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         if (\App\Models\PostTest::where('pembelajaran_id', $pembelajaran_id)->exists()) {
@@ -120,8 +120,8 @@ class PostTestController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($postTest->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat mengubah post test pada pembelajaran yang sudah dipublikasikan.'], 400);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
@@ -182,8 +182,8 @@ class PostTestController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($postTest->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menghapus post test pada pembelajaran yang sudah dipublikasikan.'], 400);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $postTest->delete();

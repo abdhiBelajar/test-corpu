@@ -14,6 +14,15 @@ class Pembelajaran extends Model
     
     protected $guarded = [];
 
+    protected $attributes = [
+        'kategori' => 'Pengembangan Kompetensi',
+    ];
+
+    public function getKategoriAttribute($value)
+    {
+        return $value ?: 'Pengembangan Kompetensi';
+    }
+
     public function komunitas()
     {
         return $this->belongsTo(Komunitas::class, 'komunitas_id', 'komunitas_id');

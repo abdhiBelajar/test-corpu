@@ -42,7 +42,7 @@ class KuisController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menambah kuis ke pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         if (\App\Models\Kuis::where('modul_id', $modul_id)->exists()) {
@@ -127,7 +127,7 @@ class KuisController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat mengubah kuis pada pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
@@ -192,7 +192,7 @@ class KuisController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menghapus kuis pada pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $kuis->delete();

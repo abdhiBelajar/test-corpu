@@ -57,7 +57,7 @@ class MateriController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menambah materi ke pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
@@ -129,7 +129,7 @@ class MateriController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat mengubah materi pada pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
@@ -164,7 +164,7 @@ class MateriController extends Controller
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
         if ($pembelajaran->status === 'dipublikasikan') {
-            return response()->json(['message' => 'Tidak dapat menghapus materi pada pembelajaran yang sudah dipublikasikan.'], 400);
+            $pembelajaran->update(['status' => 'draft']);
         }
 
         $materi->delete();
