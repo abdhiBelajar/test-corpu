@@ -49,7 +49,10 @@ class ModulController extends Controller
             'gambaran_umum' => 'nullable|string',
             'deskripsi' => 'nullable|string',
             'evaluasi_deskripsi' => 'nullable|string',
-            'urutan' => 'nullable|integer|min:1',
+            'urutan' => [
+                'nullable', 'integer', 'min:1',
+                \Illuminate\Validation\Rule::unique('modul')->where('pembelajaran_id', $pembelajaran_id)
+            ],
             'info_tatap_muka' => 'nullable|string',
         ]);
 
@@ -109,7 +112,10 @@ class ModulController extends Controller
             'gambaran_umum' => 'sometimes|string|nullable',
             'deskripsi' => 'sometimes|string|nullable',
             'evaluasi_deskripsi' => 'nullable|string',
-            'urutan' => 'sometimes|integer|min:1',
+            'urutan' => [
+                'sometimes', 'integer', 'min:1',
+                \Illuminate\Validation\Rule::unique('modul')->where('pembelajaran_id', $modul->pembelajaran_id)->ignore($id, 'modul_id')
+            ],
             'info_tatap_muka' => 'nullable|string',
         ]);
 
@@ -137,12 +143,21 @@ class ModulController extends Controller
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
+        $pembelajaranId = $modul->pembelajaran_id;
+        $pembelajaran = \App\Models\Pembelajaran::find($pembelajaranId);
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
             $pembelajaran->update(['status' => 'draft']);
         }
 
         $modul->delete();
+
+        // Rekalkulasi PembelajaranJp jika rekornya ada
+        $totalDurasi = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('durasi_total_menit');
+        $totalJp = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('jp_modul');
+        \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaranId)->update([
+            'durasi_menit' => $totalDurasi,
+            'jp_dihitung_sistem' => $totalJp,
+        ]);
 
         return response()->json([
             'message' => 'Modul berhasil dihapus'

@@ -27,6 +27,16 @@ class MateriController extends Controller
             'durasi_total_menit' => $totalMenit,
             'jp_modul' => $jp
         ]);
+
+        // Sinkronisasi PembelajaranJp jika rekornya ada
+        $pembelajaranId = $modul->pembelajaran_id;
+        $totalDurasiPembelajaran = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('durasi_total_menit');
+        $totalJpPembelajaran = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('jp_modul');
+
+        \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaranId)->update([
+            'durasi_menit' => $totalDurasiPembelajaran,
+            'jp_dihitung_sistem' => $totalJpPembelajaran,
+        ]);
     }
 
     public function index(Request $request, $modul_id)
@@ -63,11 +73,14 @@ class MateriController extends Controller
         $request->validate([
             'judul_materi' => 'required|string|max:255',
             'tipe_materi' => 'required|in:pdf,video_embed',
-            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|nullable|string',
+            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|nullable|url|max:500',
             'file_pdf' => 'required_if:tipe_materi,pdf|nullable|file|mimes:pdf|max:10240',
             'durasi_menit' => 'nullable|integer|min:1',
             'apakah_wajib' => 'nullable',
-            'urutan' => 'nullable|integer|min:1',
+            'urutan' => [
+                'nullable', 'integer', 'min:1',
+                \Illuminate\Validation\Rule::unique('materi')->where('modul_id', $modul_id)
+            ],
         ]);
 
         $url = '';
@@ -136,7 +149,10 @@ class MateriController extends Controller
             'judul_materi' => 'sometimes|string|max:255',
             'durasi_menit' => 'sometimes|integer|min:1',
             'apakah_wajib' => 'nullable|in:0,1,true,false',
-            'urutan' => 'sometimes|integer|min:1',
+            'urutan' => [
+                'sometimes', 'integer', 'min:1',
+                \Illuminate\Validation\Rule::unique('materi')->where('modul_id', $modul->modul_id)->ignore($id, 'materi_id')
+            ],
         ]);
 
         $updateData = $request->only(['judul_materi', 'durasi_menit', 'urutan']);
@@ -163,8 +179,14 @@ class MateriController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
             $pembelajaran->update(['status' => 'draft']);
+        }
+
+        // Hapus berkas fisik jika bertipe PDF
+        if ($materi->tipe_materi === 'pdf' && $materi->tautan_atau_berkas) {
+            $filePath = str_replace('/storage/', '', $materi->tautan_atau_berkas);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($filePath);
         }
 
         $materi->delete();

@@ -9,6 +9,8 @@ use App\Models\SoalKuis;
 use App\Models\RiwayatKuis;
 use App\Models\PendaftaranPembelajaran;
 use App\Models\Materi;
+use App\Models\Modul;
+use App\Models\ProgresMateri;
 
 class KuisController extends Controller
 {
@@ -23,6 +25,12 @@ class KuisController extends Controller
 
         if (!$pendaftaran) {
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
+        }
+
+        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
+        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id);
+        if ($prerequisiteError) {
+            return response()->json(['message' => $prerequisiteError], 422);
         }
 
         $kuis = Kuis::with('soalKuis')->where('modul_id', $modul_id)->where('kuis_id', $kuis_id)->first();
@@ -84,6 +92,12 @@ class KuisController extends Controller
 
         if (!$pendaftaran) {
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
+        }
+
+        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
+        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id);
+        if ($prerequisiteError) {
+            return response()->json(['message' => $prerequisiteError], 422);
         }
 
         $kuis = Kuis::with('soalKuis')->where('modul_id', $modul_id)->where('kuis_id', $kuis_id)->first();
@@ -201,5 +215,57 @@ class KuisController extends Controller
         }
 
         $pendaftaran->save();
+    }
+
+    private function validatePrerequisites($pendaftaran, $modulId, $courseId)
+    {
+        $currentModul = Modul::where('pembelajaran_id', $courseId)->find($modulId);
+        if (!$currentModul) {
+            return 'Modul tidak valid untuk pelatihan ini.';
+        }
+
+        // Cek modul sebelumnya
+        $prevModuls = Modul::where('pembelajaran_id', $courseId)
+            ->where('urutan', '<', $currentModul->urutan)
+            ->with(['materi', 'kuis'])
+            ->get();
+
+        foreach ($prevModuls as $pm) {
+            $pmMateriIds = $pm->materi->pluck('materi_id');
+            $pmDone = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->whereIn('materi_id', $pmMateriIds)
+                ->where('apakah_selesai', true)
+                ->count();
+
+            if ($pmMateriIds->count() > 0 && $pmDone < $pmMateriIds->count()) {
+                return 'Anda harus menyelesaikan materi pada modul sebelumnya terlebih dahulu.';
+            }
+
+            if ($pm->kuis) {
+                $isPassed = RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                    ->where('kuis_id', $pm->kuis->kuis_id)
+                    ->where('apakah_lulus', true)
+                    ->exists();
+
+                if (!$isPassed) {
+                    return 'Anda harus lulus kuis pada modul sebelumnya terlebih dahulu.';
+                }
+            }
+        }
+
+        // Cek semua materi di modul saat ini
+        $materiIds = Materi::where('modul_id', $modulId)->pluck('materi_id');
+        if ($materiIds->count() > 0) {
+            $completedCount = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->whereIn('materi_id', $materiIds)
+                ->where('apakah_selesai', true)
+                ->count();
+
+            if ($completedCount < $materiIds->count()) {
+                return 'Selesaikan seluruh materi pada modul ini sebelum mengerjakan kuis.';
+            }
+        }
+
+        return null;
     }
 }

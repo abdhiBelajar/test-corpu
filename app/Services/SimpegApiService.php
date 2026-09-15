@@ -116,4 +116,46 @@ class SimpegApiService
 
         return $mockData[$nip] ?? null;
     }
+
+    /**
+     * Sinkronisasi data kelulusan / sertifikat peserta ke sistem kepegawaian SIMPEG (PRD PST-11).
+     */
+    public function syncSertifikat($nip, $nomorSertifikat, $judulPembelajaran, $nilai, $jpl = 0)
+    {
+        $apiUrl = config('services.simpeg.url');
+        $apiKey = config('services.simpeg.key');
+
+        if (!empty($apiUrl)) {
+            try {
+                $response = Http::timeout(5)
+                    ->connectTimeout(3)
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                    ])
+                    ->post(rtrim($apiUrl, '/') . "/sertifikat/sync", [
+                        'nip' => $nip,
+                        'nomor_sertifikat' => $nomorSertifikat,
+                        'judul_pembelajaran' => $judulPembelajaran,
+                        'nilai' => $nilai,
+                        'jpl' => $jpl,
+                        'tanggal_lulus' => now()->toIso8601String(),
+                    ]);
+
+                if ($response->successful()) {
+                    Log::info("SIMPEG certificate sync succeeded for NIP {$nip}, cert: {$nomorSertifikat}");
+                    return true;
+                }
+
+                Log::warning("SIMPEG certificate sync returned status {$response->status()} for NIP: {$nip}");
+            } catch (\Throwable $e) {
+                Log::error("SIMPEG certificate sync failed for NIP {$nip}: " . $e->getMessage());
+            }
+        } else {
+            // Mock fallback logger
+            Log::info("[SIMPEG MOCK] Certificate synced for NIP {$nip}: {$judulPembelajaran} (Cert: {$nomorSertifikat}, Nilai: {$nilai}, JPL: {$jpl})");
+        }
+
+        return true;
+    }
 }

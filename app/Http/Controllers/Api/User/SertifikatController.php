@@ -86,7 +86,8 @@ class SertifikatController extends Controller
 
     private function generatePdfResponse($sertifikat)
     {
-        $pembelajaran = $sertifikat->pendaftaran->pembelajaran;
+        $pembelajaran = $sertifikat->pendaftaran ? $sertifikat->pendaftaran->pembelajaran : null;
+        $pengguna = $sertifikat->pendaftaran ? $sertifikat->pendaftaran->pengguna : null;
         $jpDet = $pembelajaran ? $pembelajaran->pembelajaranJp->first() : null;
         
         $data = [
@@ -95,6 +96,7 @@ class SertifikatController extends Controller
                 'judul_pembelajaran' => $pembelajaran->judul_pembelajaran ?? '-',
                 'nama_peserta' => $sertifikat->nama_lengkap_snapshot,
                 'nip' => $sertifikat->nip_snapshot,
+                'unit_kerja' => $pengguna->unit_kerja ?? '-',
                 'jpl' => $jpDet ? $jpDet->jp_final : 0,
                 'tanggal' => Carbon::parse($sertifikat->tanggal_terbit)->translatedFormat('d F Y')
             ]

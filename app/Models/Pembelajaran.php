@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Pembelajaran extends Model
 {
+    use SoftDeletes;
     protected $table = 'pembelajaran';
     protected $primaryKey = 'pembelajaran_id';
     
@@ -30,7 +32,7 @@ class Pembelajaran extends Model
 
     public function perancang()
     {
-        return $this->belongsTo(Pengguna::class, 'dibuat_oleh_pengguna_id', 'pengguna_id');
+        return $this->belongsTo(Pengguna::class, 'dirancang_oleh_pengguna_id', 'pengguna_id');
     }
 
     public function modul()

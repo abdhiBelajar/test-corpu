@@ -22,7 +22,7 @@ class VerifikasiJpController extends Controller
     public function update(\Illuminate\Http\Request $request, string $pembelajaran_id)
     {
         $request->validate([
-            'jp_final' => 'required|numeric|min:0'
+            'jp_final' => 'required|numeric|min:0|max:100'
         ]);
 
         $jp = \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaran_id)->firstOrFail();

@@ -17,6 +17,13 @@ class KatalogController extends Controller
             ->withCount('modul')
             ->with('pembelajaranJp');
 
+        // Batasi katalog sesuai rumpun jabatan peserta (PRD PST-2, Bab 5)
+        if (!empty($user->rumpun_jabatan)) {
+            $query->whereHas('komunitas', function($q) use ($user) {
+                $q->where('rumpun_jabatan', $user->rumpun_jabatan);
+            });
+        }
+
         if ($request->has('kategori') && $request->kategori !== 'Semua Kategori') {
             $query->where('kategori', $request->kategori);
         }
@@ -70,7 +77,14 @@ class KatalogController extends Controller
     {
         $user = $request->user();
         
-        $pembelajaran = Pembelajaran::where('status', 'dipublikasikan')->findOrFail($id);
+        $pembelajaran = Pembelajaran::with('komunitas')->where('status', 'dipublikasikan')->findOrFail($id);
+
+        // Validasi batas rumpun jabatan (PRD PST-2, Bab 5)
+        if (!empty($user->rumpun_jabatan) && $pembelajaran->komunitas && $pembelajaran->komunitas->rumpun_jabatan !== $user->rumpun_jabatan) {
+            return response()->json([
+                'message' => 'Anda tidak memiliki akses untuk mendaftar pembelajaran di luar rumpun jabatan Anda (' . $user->rumpun_jabatan . ').'
+            ], 403);
+        }
 
         $exists = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)
             ->where('pembelajaran_id', $id)

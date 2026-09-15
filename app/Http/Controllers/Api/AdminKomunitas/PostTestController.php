@@ -47,13 +47,13 @@ class PostTestController extends Controller
 
         $request->validate([
             'nilai_kelulusan' => 'required|numeric|min:0|max:100',
-            'maks_percobaan' => 'nullable|integer|min:1',
+            'maks_percobaan' => 'nullable|integer|min:1|max:3',
             'acak_soal' => 'nullable|boolean',
             'tampilkan_kunci_setelah' => 'nullable|boolean',
             'durasi_menit' => 'nullable|integer|min:1',
             'soal' => 'nullable|array',
             'soal.*.teks_soal' => 'required|string',
-            'soal.*.pilihan_jawaban_json' => 'required|array',
+            'soal.*.pilihan_jawaban_json' => 'required',
             'soal.*.kunci_jawaban' => 'required|string|max:10',
             'soal.*.bobot_nilai' => 'nullable|numeric|min:0',
         ]);
@@ -93,7 +93,8 @@ class PostTestController extends Controller
             ], 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
-            return response()->json(['message' => 'Gagal menyimpan post test: ' . $e->getMessage()], 500);
+            \Illuminate\Support\Facades\Log::error('Gagal menyimpan post test: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal menyimpan post test. Silakan periksa kembali data Anda.'], 500);
         }
     }
 
@@ -126,7 +127,7 @@ class PostTestController extends Controller
 
         $request->validate([
             'nilai_kelulusan' => 'sometimes|numeric|min:0|max:100',
-            'maks_percobaan' => 'sometimes|integer|min:1',
+            'maks_percobaan' => 'sometimes|integer|min:1|max:3',
             'acak_soal' => 'sometimes|boolean',
             'tampilkan_kunci_setelah' => 'sometimes|boolean',
             'durasi_menit' => 'nullable|integer|min:1',
@@ -169,7 +170,8 @@ class PostTestController extends Controller
             ]);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
-            return response()->json(['message' => 'Gagal memperbarui post test: ' . $e->getMessage()], 500);
+            \Illuminate\Support\Facades\Log::error('Gagal memperbarui post test: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal memperbarui post test. Silakan periksa kembali data Anda.'], 500);
         }
     }
 

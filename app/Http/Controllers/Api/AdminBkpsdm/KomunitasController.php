@@ -10,12 +10,45 @@ class KomunitasController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $komunitas = \App\Models\Komunitas::all();
+        $query = \App\Models\Komunitas::query();
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_komunitas', 'like', "%{$search}%")
+                  ->orWhere('deskripsi', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('rumpun_jabatan')) {
+            $query->where('rumpun_jabatan', $request->rumpun_jabatan);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $perPage = $request->input('per_page', 10);
+            $komunitas = $query->latest('komunitas_id')->paginate($perPage);
+
+            return response()->json([
+                'message' => 'Daftar Komunitas',
+                'data' => $komunitas->items(),
+                'meta' => [
+                    'current_page' => $komunitas->currentPage(),
+                    'last_page' => $komunitas->lastPage(),
+                    'per_page' => $komunitas->perPage(),
+                    'total' => $komunitas->total(),
+                ]
+            ]);
+        }
+
         return response()->json([
             'message' => 'Daftar Komunitas',
-            'data' => $komunitas
+            'data' => $query->latest('komunitas_id')->get()
         ]);
     }
 
@@ -25,10 +58,11 @@ class KomunitasController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'nama_komunitas' => 'required|string|unique:komunitas',
+            'nama_komunitas' => 'required|string|max:255|unique:komunitas',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'required|in:JPT,JA,JF,Pelaksana',
-            'sub_bidang_tersedia_json' => 'nullable|array'
+            'sub_bidang_tersedia_json' => 'nullable|array',
+            'sub_bidang_tersedia_json.*' => 'string|max:100'
         ]);
 
         $komunitas = \App\Models\Komunitas::create([
@@ -66,10 +100,11 @@ class KomunitasController extends Controller
         $komunitas = \App\Models\Komunitas::findOrFail($id);
 
         $request->validate([
-            'nama_komunitas' => 'nullable|string|unique:komunitas,nama_komunitas,' . $id . ',komunitas_id',
+            'nama_komunitas' => 'nullable|string|max:255|unique:komunitas,nama_komunitas,' . $id . ',komunitas_id',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
             'sub_bidang_tersedia_json' => 'nullable|array',
+            'sub_bidang_tersedia_json.*' => 'string|max:100',
             'status' => 'nullable|in:aktif,nonaktif'
         ]);
 

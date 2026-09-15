@@ -39,6 +39,70 @@ class CourseDetailController extends Controller
 
         // Map data agar mudah dikonsumsi frontend
         $jpDet = $pembelajaran->pembelajaranJp->first();
+
+        // Evaluasi locking silabus
+        $isPreviousModulePassed = true;
+        $mappedModul = $pembelajaran->modul->map(function ($m) use ($progresMateri, $pendaftaran, &$isPreviousModulePassed) {
+            $isModuleLocked = !$isPreviousModulePassed;
+
+            $isPreviousMateriDone = true;
+            $allMateriInThisModulDone = true;
+
+            $materiList = $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran, $isModuleLocked, &$isPreviousMateriDone, &$allMateriInThisModulDone) {
+                $isRead = isset($progresMateri[$mat->materi_id]) && $progresMateri[$mat->materi_id] ? true : false;
+                $isLocked = $isModuleLocked || !$isPreviousMateriDone;
+
+                if (!$isRead) {
+                    $isPreviousMateriDone = false;
+                    $allMateriInThisModulDone = false;
+                }
+
+                return [
+                    'materi_id' => $mat->materi_id,
+                    'judul' => $mat->judul_materi,
+                    'tipe' => $mat->tipe_materi,
+                    'tautan' => ($pendaftaran && !$isLocked) ? $mat->tautan_atau_berkas : null,
+                    'durasi' => $mat->durasi_menit,
+                    'is_read' => $isRead,
+                    'is_locked' => $isLocked
+                ];
+            });
+
+            $isKuisCompleted = false;
+            $isKuisLocked = true;
+            if ($m->kuis) {
+                $isKuisCompleted = $pendaftaran ? \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                    ->where('kuis_id', $m->kuis->kuis_id)
+                    ->where('apakah_lulus', true)
+                    ->exists() : false;
+                
+                // Kuis terbuka hanya jika seluruh materi pada modul ini sudah dibaca
+                $isKuisLocked = $isModuleLocked || !$allMateriInThisModulDone;
+            }
+
+            // Status kelulusan modul untuk menentukan apakah modul berikutnya terbuka
+            if ($m->kuis) {
+                $isPreviousModulePassed = $allMateriInThisModulDone && $isKuisCompleted;
+            } else {
+                $isPreviousModulePassed = $allMateriInThisModulDone;
+            }
+
+            return [
+                'modul_id' => $m->modul_id,
+                'judul' => $m->judul_modul,
+                'urutan' => $m->urutan,
+                'is_locked' => $isModuleLocked,
+                'materi' => $materiList,
+                'kuis' => $m->kuis ? [
+                    'kuis_id' => $m->kuis->kuis_id,
+                    'judul' => $m->kuis->judul_kuis,
+                    'durasi' => $m->kuis->durasi_menit,
+                    'is_completed' => $isKuisCompleted,
+                    'is_locked' => $isKuisLocked
+                ] : null
+            ];
+        });
+
         $data = [
             'pembelajaran_id' => $pembelajaran->pembelajaran_id,
             'judul' => $pembelajaran->judul_pembelajaran,
@@ -48,36 +112,12 @@ class CourseDetailController extends Controller
             'is_enrolled' => $pendaftaran ? true : false,
             'status_pendaftaran' => $pendaftaran->status_pendaftaran ?? null,
             'progress' => $pendaftaran->persentase_progres ?? 0,
-            'modul' => $pembelajaran->modul->map(function ($m) use ($progresMateri, $pendaftaran) {
-                return [
-                    'modul_id' => $m->modul_id,
-                    'judul' => $m->judul_modul,
-                    'urutan' => $m->urutan,
-                    'materi' => $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran) {
-                        return [
-                            'materi_id' => $mat->materi_id,
-                            'judul' => $mat->judul_materi,
-                            'tipe' => $mat->tipe_materi,
-                            'tautan' => $pendaftaran ? $mat->tautan_atau_berkas : null,
-                            'durasi' => $mat->durasi_menit,
-                            'is_read' => isset($progresMateri[$mat->materi_id]) && $progresMateri[$mat->materi_id] ? true : false
-                        ];
-                    }),
-                    'kuis' => $m->kuis ? [
-                        'kuis_id' => $m->kuis->kuis_id,
-                        'judul' => $m->kuis->judul_kuis,
-                        'durasi' => $m->kuis->durasi_menit,
-                        'is_completed' => $pendaftaran ? \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
-                            ->where('kuis_id', $m->kuis->kuis_id)
-                            ->where('apakah_lulus', true)
-                            ->exists() : false
-                    ] : null
-                ];
-            }),
+            'modul' => $mappedModul,
             'post_test' => $pembelajaran->postTest ? [
                 'post_test_id' => $pembelajaran->postTest->post_test_id,
                 'judul' => 'Post Test Akhir Pelatihan',
-                'durasi' => $pembelajaran->postTest->durasi_menit
+                'durasi' => $pembelajaran->postTest->durasi_menit,
+                'is_locked' => ($pendaftaran->persentase_progres ?? 0) < 100
             ] : null
         ];
 
@@ -97,6 +137,65 @@ class CourseDetailController extends Controller
 
         if (!$pendaftaran) {
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
+        }
+
+        // Validasi keberadaan materi dan kecocokan pembelajaran
+        $materi = Materi::with('modul')->find($materi_id);
+        if (!$materi || $materi->modul->pembelajaran_id != $id) {
+            return response()->json(['message' => 'Materi tidak ditemukan dalam pelatihan ini'], 404);
+        }
+
+        $currentModul = $materi->modul;
+
+        // 1. Validasi urutan modul: Semua modul dengan urutan lebih kecil harus sudah selesai materi & kuisnya
+        $prevModuls = \App\Models\Modul::where('pembelajaran_id', $id)
+            ->where('urutan', '<', $currentModul->urutan)
+            ->with(['materi', 'kuis'])
+            ->get();
+
+        foreach ($prevModuls as $pm) {
+            $pmMateriIds = $pm->materi->pluck('materi_id');
+            $pmMateriDone = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->whereIn('materi_id', $pmMateriIds)
+                ->where('apakah_selesai', true)
+                ->count();
+
+            if ($pmMateriIds->count() > 0 && $pmMateriDone < $pmMateriIds->count()) {
+                return response()->json([
+                    'message' => 'Anda harus menyelesaikan materi pada modul sebelumnya terlebih dahulu.'
+                ], 422);
+            }
+
+            if ($pm->kuis) {
+                $isKuisPassed = \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                    ->where('kuis_id', $pm->kuis->kuis_id)
+                    ->where('apakah_lulus', true)
+                    ->exists();
+
+                if (!$isKuisPassed) {
+                    return response()->json([
+                        'message' => 'Anda harus lulus kuis pada modul sebelumnya terlebih dahulu.'
+                    ], 422);
+                }
+            }
+        }
+
+        // 2. Validasi urutan materi dalam modul yang sama: Seluruh materi dengan urutan lebih kecil harus selesai
+        $prevMateriList = Materi::where('modul_id', $currentModul->modul_id)
+            ->where('urutan', '<', $materi->urutan)
+            ->pluck('materi_id');
+
+        if ($prevMateriList->count() > 0) {
+            $prevMateriDone = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->whereIn('materi_id', $prevMateriList)
+                ->where('apakah_selesai', true)
+                ->count();
+
+            if ($prevMateriDone < $prevMateriList->count()) {
+                return response()->json([
+                    'message' => 'Anda harus menyelesaikan materi sebelumnya sesuai urutan silabus.'
+                ], 422);
+            }
         }
 
         // Tandai sebagai selesai

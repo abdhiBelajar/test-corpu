@@ -73,9 +73,9 @@ class AuthController extends Controller
         try {
             Mail::to($email)->send(new OtpMail($otp));
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal kirim email OTP register: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Gagal mengirim email OTP. Pastikan email valid dan konfigurasi email server aktif.',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengirim email OTP. Silakan coba beberapa saat lagi atau hubungi administrator.'
             ], 500);
         }
 
@@ -239,21 +239,11 @@ class AuthController extends Controller
 
     public function changePasswordRequestOtp(Request $request)
     {
-        $request->validate([
-            'email' => 'nullable|email',
-        ]);
-
         $pengguna = $request->user();
-
-        // Update email if provided
-        if ($request->has('email') && !empty($request->email)) {
-            $pengguna->email = $request->email;
-            $pengguna->save();
-        }
 
         if (empty($pengguna->email)) {
             return response()->json([
-                'message' => 'Email belum diatur. Silakan masukkan email Anda.'
+                'message' => 'Akun belum memiliki email resmi terdaftar. Silakan hubungi administrator BKPSDM.'
             ], 400);
         }
 
@@ -263,14 +253,14 @@ class AuthController extends Controller
         try {
             \Illuminate\Support\Facades\Mail::to($pengguna->email)->send(new \App\Mail\OtpMail($otp));
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal kirim email OTP ubah password: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Gagal mengirim email OTP. Pastikan konfigurasi SMTP sudah benar.',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengirim email OTP. Silakan coba beberapa saat lagi.'
             ], 500);
         }
 
         return response()->json([
-            'message' => 'Kode OTP telah dikirim ke email Anda.'
+            'message' => 'Kode OTP telah dikirim ke email terdaftar Anda.'
         ]);
     }
 
@@ -331,17 +321,17 @@ class AuthController extends Controller
             ], 404);
         }
 
-        // Jika email di database kosong, simpan email yang baru dimasukkan.
-        // Jika sudah ada, pastikan email yang dimasukkan cocok dengan database.
+        // Jangan izinkan binding email baru secara sepihak jika email kosong
         if (empty($pengguna->email)) {
-            $pengguna->email = $request->email;
-            $pengguna->save();
-        } else {
-            if ($pengguna->email !== $request->email) {
-                return response()->json([
-                    'message' => 'Email tidak cocok dengan data pengguna yang terdaftar.'
-                ], 400);
-            }
+            return response()->json([
+                'message' => 'Akun belum memiliki email resmi terdaftar. Silakan hubungi administrator BKPSDM.'
+            ], 400);
+        }
+
+        if (strtolower(trim($pengguna->email)) !== strtolower(trim($request->email))) {
+            return response()->json([
+                'message' => 'Email tidak cocok dengan data pengguna yang terdaftar.'
+            ], 400);
         }
 
         $otp = (string) rand(100000, 999999);
@@ -350,9 +340,9 @@ class AuthController extends Controller
         try {
             \Illuminate\Support\Facades\Mail::to($pengguna->email)->send(new \App\Mail\OtpMail($otp));
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal kirim email OTP reset password: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Gagal mengirim email OTP. Pastikan konfigurasi SMTP sudah benar.',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengirim email OTP. Silakan coba beberapa saat lagi.'
             ], 500);
         }
 

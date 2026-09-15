@@ -21,7 +21,7 @@ class PembelajaranController extends Controller
                             ->map(function ($c) {
                                 $totalModul = $c->modul ? $c->modul->count() : 0;
                                 $calculatedJp = $c->pembelajaranJp && $c->pembelajaranJp->isNotEmpty()
-                                    ? $c->pembelajaranJp->first()->total_jp
+                                    ? ($c->pembelajaranJp->first()->jp_final ?? $c->pembelajaranJp->first()->jp_dihitung_sistem)
                                     : round($c->modul ? $c->modul->sum('jp_modul') : 0, 1);
 
                                 $pendaftaran = \App\Models\PendaftaranPembelajaran::where('pembelajaran_id', $c->pembelajaran_id)->get();
@@ -45,8 +45,9 @@ class PembelajaranController extends Controller
 
     public function myKomunitas(Request $request)
     {
-        // Ponytail: Just return all communities for now so the dropdown works
-        $komunitas = \App\Models\Komunitas::all();
+        $user = $request->user();
+        $komunitasIds = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)->pluck('komunitas_id');
+        $komunitas = \App\Models\Komunitas::whereIn('komunitas_id', $komunitasIds)->get();
             
         return response()->json([
             'message' => 'Komunitas berhasil diambil',
@@ -117,7 +118,7 @@ class PembelajaranController extends Controller
         }
 
         $calculatedJp = $pembelajaran->pembelajaranJp && $pembelajaran->pembelajaranJp->isNotEmpty()
-            ? $pembelajaran->pembelajaranJp->first()->total_jp
+            ? ($pembelajaran->pembelajaranJp->first()->jp_final ?? $pembelajaran->pembelajaranJp->first()->jp_dihitung_sistem)
             : round($pembelajaran->modul ? $pembelajaran->modul->sum('jp_modul') : 0, 1);
         $pembelajaran->jpl = $calculatedJp > 0 ? $calculatedJp : 2;
 
@@ -150,8 +151,7 @@ class PembelajaranController extends Controller
             'ringkasan_materi' => 'nullable|string',
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
-            'surat_pernyataan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'status' => 'nullable|in:draft,menunggu_approval,ditolak',
+            'surat_pernyataan' => 'nullable|file|mimes:pdf|max:5120',
         ]);
 
         $updateData = $request->only([
@@ -163,11 +163,9 @@ class PembelajaranController extends Controller
             $updateData['kategori'] = $updateData['kategori'] ?: 'Pengembangan Kompetensi';
         }
 
-        // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit/disimpan otomatis kembali menjadi draft
+        // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit otomatis kembali menjadi draft
         if ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->status === 'ditolak') {
             $updateData['status'] = 'draft';
-        } elseif ($request->filled('status')) {
-            $updateData['status'] = $request->status;
         }
 
         if ($request->hasFile('surat_pernyataan')) {
@@ -240,24 +238,17 @@ class PembelajaranController extends Controller
 
         $request->validate([
             'ringkasan_materi' => 'nullable|string',
-            'surat_pernyataan' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'surat_pernyataan' => 'nullable|file|mimes:pdf|max:5120',
         ]);
 
-        $updateData = [
-            'ringkasan_materi' => $request->ringkasan_materi ?: ($pembelajaran->ringkasan_materi ?: 'Ringkasan materi pembelajaran'),
-            'status' => 'menunggu_approval'
-        ];
-
-        if (empty($pembelajaran->kategori)) {
-            $updateData['kategori'] = 'Pengembangan Kompetensi';
+        // Cek apakah surat pernyataan tersedia (bisa yang baru diupload atau sudah ada sebelumnya)
+        if (!$request->hasFile('surat_pernyataan') && empty($pembelajaran->surat_pernyataan_url)) {
+            return response()->json([
+                'message' => 'Surat pernyataan keabsahan konten (format PDF) wajib diunggah sebelum mengajukan approval.'
+            ], 422);
         }
 
-        if ($request->hasFile('surat_pernyataan')) {
-            $path = $request->file('surat_pernyataan')->store('surat_pernyataan', 'public');
-            $updateData['surat_pernyataan_url'] = '/storage/' . $path;
-        }
-
-        // Cek validasi 3 unsur wajib (Overview, Substansi, Evaluasi)
+        // Cek validasi 3 unsur wajib (Overview, Substansi, Evaluasi dengan soal)
         $moduls = \App\Models\Modul::where('pembelajaran_id', $id)->get();
         if ($moduls->isEmpty()) {
             return response()->json(['message' => 'Pembelajaran harus memiliki minimal 1 modul sebelum diajukan.'], 400);
@@ -265,16 +256,22 @@ class PembelajaranController extends Controller
 
         foreach ($moduls as $modul) {
             $hasMateri = \App\Models\Materi::where('modul_id', $modul->modul_id)->exists();
-            $hasKuis = \App\Models\Kuis::where('modul_id', $modul->modul_id)->exists();
+            $kuis = \App\Models\Kuis::where('modul_id', $modul->modul_id)->first();
             
             if (!$hasMateri) {
                 return response()->json([
                     'message' => "Modul '{$modul->judul_modul}' belum memiliki materi. Silakan unggah minimal 1 materi sebelum mengajukan."
                 ], 400);
             }
-            if (!$hasKuis) {
+            if (!$kuis) {
                 return response()->json([
                     'message' => "Modul '{$modul->judul_modul}' belum memiliki kuis evaluasi. Silakan buat kuis untuk modul ini sebelum mengajukan."
+                ], 400);
+            }
+            $hasSoalKuis = \App\Models\SoalKuis::where('kuis_id', $kuis->kuis_id)->exists();
+            if (!$hasSoalKuis) {
+                return response()->json([
+                    'message' => "Kuis pada modul '{$modul->judul_modul}' belum memiliki butir soal evaluasi."
                 ], 400);
             }
         }
@@ -294,22 +291,51 @@ class PembelajaranController extends Controller
             ], 400);
         }
 
-        $pembelajaran->update($updateData);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pembelajaran, $user) {
+            $updateData = [
+                'ringkasan_materi' => $request->ringkasan_materi ?: ($pembelajaran->ringkasan_materi ?: 'Ringkasan materi pembelajaran'),
+                'status' => 'menunggu_approval'
+            ];
 
-        // Tambah/Update ke tabel ValidasiPembelajaran
-        \App\Models\ValidasiPembelajaran::updateOrCreate(
-            ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
-            [
-                'divalidasi_oleh_pengguna_id' => $user->pengguna_id, // Default ke diri sendiri sementara menunggu direview Admin BKPSDM
-                'status_validasi' => 'diajukan',
-                'catatan' => null
-            ]
-        );
+            if (empty($pembelajaran->kategori)) {
+                $updateData['kategori'] = 'Pengembangan Kompetensi';
+            }
 
-        return response()->json([
-            'message' => 'Pembelajaran berhasil diajukan untuk approval',
-            'data' => $pembelajaran
-        ]);
+            if ($request->hasFile('surat_pernyataan')) {
+                $path = $request->file('surat_pernyataan')->store('surat_pernyataan', 'public');
+                $updateData['surat_pernyataan_url'] = '/storage/' . $path;
+            }
+
+            $pembelajaran->update($updateData);
+
+            // Hitung dan sinkronisasi PembelajaranJp
+            $totalDurasi = \App\Models\Modul::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->sum('durasi_total_menit');
+            $totalJp = \App\Models\Modul::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->sum('jp_modul');
+
+            \App\Models\PembelajaranJp::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'jenis_pelatihan'    => 'formal',
+                    'durasi_menit'       => $totalDurasi,
+                    'jp_dihitung_sistem' => $totalJp,
+                ]
+            );
+
+            // Tambah/Update ke tabel ValidasiPembelajaran
+            \App\Models\ValidasiPembelajaran::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'divalidasi_oleh_pengguna_id' => $user->pengguna_id,
+                    'status_validasi' => 'diajukan',
+                    'catatan' => null
+                ]
+            );
+
+            return response()->json([
+                'message' => 'Pembelajaran berhasil diajukan untuk approval',
+                'data' => $pembelajaran->fresh(['komunitas', 'pembelajaranJp', 'validasi', 'modul.materi'])
+            ]);
+        });
     }
 
 }

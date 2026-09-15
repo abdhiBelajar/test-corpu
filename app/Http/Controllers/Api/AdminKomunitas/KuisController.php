@@ -52,12 +52,12 @@ class KuisController extends Controller
         $request->validate([
             'judul_kuis' => 'required|string|max:200',
             'nilai_kelulusan' => 'required|numeric|min:0|max:100',
-            'maks_percobaan' => 'nullable|integer|min:1',
+            'maks_percobaan' => 'nullable|integer|min:1|max:3',
             'acak_soal' => 'nullable|boolean',
             'tampilkan_kunci_setelah' => 'nullable|boolean',
             'soal' => 'nullable|array',
             'soal.*.teks_soal' => 'required|string',
-            'soal.*.pilihan_jawaban_json' => 'required|array', // expected to be sent as assoc array/object
+            'soal.*.pilihan_jawaban_json' => 'required', // expected to be sent as array or valid json string
             'soal.*.kunci_jawaban' => 'required|string|max:10',
             'soal.*.bobot_nilai' => 'nullable|numeric|min:0',
         ]);
@@ -97,7 +97,8 @@ class KuisController extends Controller
             ], 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
-            return response()->json(['message' => 'Gagal menyimpan kuis: ' . $e->getMessage()], 500);
+            \Illuminate\Support\Facades\Log::error('Gagal menyimpan kuis: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal menyimpan kuis. Silakan periksa kembali data Anda.'], 500);
         }
     }
 
@@ -126,14 +127,14 @@ class KuisController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
             $pembelajaran->update(['status' => 'draft']);
         }
 
         $request->validate([
             'judul_kuis' => 'sometimes|string|max:200',
             'nilai_kelulusan' => 'sometimes|numeric|min:0|max:100',
-            'maks_percobaan' => 'sometimes|integer|min:1',
+            'maks_percobaan' => 'sometimes|integer|min:1|max:3',
             'acak_soal' => 'sometimes|boolean',
             'tampilkan_kunci_setelah' => 'sometimes|boolean',
             'soal' => 'nullable|array', // jika dikirim, akan mereplace/sync seluruh soal
@@ -151,7 +152,6 @@ class KuisController extends Controller
 
             if ($request->has('soal') && is_array($request->soal)) {
                 // Untuk kesederhanaan draf, kita hapus semua soal lama dan insert yang baru
-                // (Kecuali jika Kuis sudah pernah dikerjakan, maka tidak boleh dihapus - tapi asumsinya ini belum dipublikasikan)
                 \App\Models\SoalKuis::where('kuis_id', $kuis->kuis_id)->delete();
 
                 foreach ($request->soal as $item) {
@@ -177,7 +177,8 @@ class KuisController extends Controller
             ]);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\DB::rollBack();
-            return response()->json(['message' => 'Gagal memperbarui kuis: ' . $e->getMessage()], 500);
+            \Illuminate\Support\Facades\Log::error('Gagal memperbarui kuis: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal memperbarui kuis. Silakan periksa kembali data Anda.'], 500);
         }
     }
 

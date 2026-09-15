@@ -12,8 +12,14 @@ class KomunitasController extends Controller
     {
         $user = $request->user();
 
-        // Ambil semua komunitas beserta jumlah course & member
-        $komunitas = Komunitas::withCount(['pembelajaran', 'anggota'])->get();
+        $query = Komunitas::withCount(['pembelajaran', 'anggota']);
+
+        // Batasi komunitas sesuai rumpun jabatan peserta (PRD PST-2, Bab 5)
+        if (!empty($user->rumpun_jabatan)) {
+            $query->where('rumpun_jabatan', $user->rumpun_jabatan);
+        }
+
+        $komunitas = $query->get();
 
         // Ambil daftar komunitas yang di-join oleh user ini
         $joinedKomunitasIds = $user->komunitas()->pluck('komunitas.komunitas_id')->toArray();
@@ -24,6 +30,7 @@ class KomunitasController extends Controller
                 'title' => $k->nama_komunitas,
                 'description' => $k->deskripsi,
                 'category' => $k->rumpun_jabatan,
+                'sub_bidang_tersedia' => $k->sub_bidang_tersedia_json ?? [],
                 'courses' => $k->pembelajaran_count,
                 'members' => $k->anggota_count,
                 'is_joined' => in_array($k->komunitas_id, $joinedKomunitasIds),
@@ -45,6 +52,27 @@ class KomunitasController extends Controller
 
         if (!$komunitas) {
             return response()->json(['message' => 'Komunitas tidak ditemukan'], 404);
+        }
+
+        // Validasi batasan rumpun jabatan (PRD PST-2, Bab 5)
+        if (!empty($user->rumpun_jabatan) && $komunitas->rumpun_jabatan !== $user->rumpun_jabatan) {
+            return response()->json([
+                'message' => 'Anda tidak memiliki akses untuk bergabung ke komunitas di luar rumpun jabatan Anda (' . $user->rumpun_jabatan . ').'
+            ], 403);
+        }
+
+        // Khusus rumpun JF: Peserta wajib memilih sub-bidang (PRD PST-3)
+        if ($komunitas->rumpun_jabatan === 'JF') {
+            $subBidangTersedia = $komunitas->sub_bidang_tersedia_json ?? [];
+            if (!empty($subBidangTersedia)) {
+                $subBidang = $request->input('sub_bidang');
+                if (!$subBidang || !in_array($subBidang, $subBidangTersedia)) {
+                    return response()->json([
+                        'message' => 'Silakan pilih sub-bidang yang valid untuk komunitas rumpun JF ini.',
+                        'sub_bidang_tersedia' => $subBidangTersedia
+                    ], 422);
+                }
+            }
         }
 
         // Cek apakah sudah bergabung

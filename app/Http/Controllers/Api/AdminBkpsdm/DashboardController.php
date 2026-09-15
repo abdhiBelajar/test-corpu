@@ -12,7 +12,12 @@ class DashboardController extends Controller
         $totalPeserta = \App\Models\Pengguna::where('peran', 'peserta')->count();
         $userAktif = \App\Models\Pengguna::where('peran', 'peserta')->where('status', 'aktif')->count();
         $totalKomunitas = \App\Models\Komunitas::count();
+        $komunitasAktif = \App\Models\Komunitas::where('status', 'aktif')->count();
         $totalSertifikat = \App\Models\Sertifikat::count(); // Asumsikan semua tersinkron adalah terverifikasi
+
+        $persentaseKeaktifan = $totalKomunitas > 0 
+            ? round(($komunitasAktif / $totalKomunitas) * 100, 1) 
+            : 0;
 
         // Trend sertifikat per bulan (6 bulan terakhir)
         $trendSertifikat = [];
@@ -27,8 +32,12 @@ class DashboardController extends Controller
             ];
         }
 
-        // Recent courses (latest 5 regardless of status)
-        $recentCourses = \App\Models\Pembelajaran::orderBy('dibuat_pada', 'desc')->take(5)->get();
+        // Recent submitted/published courses (exclude drafts)
+        $recentCourses = \App\Models\Pembelajaran::whereIn('status', ['menunggu_approval', 'dipublikasikan', 'ditolak'])
+            ->with(['komunitas', 'perancang'])
+            ->orderBy('dibuat_pada', 'desc')
+            ->take(5)
+            ->get();
 
         return response()->json([
             'message' => 'Dashboard Admin BKPSDM',
@@ -37,8 +46,9 @@ class DashboardController extends Controller
                     'total_peserta' => $totalPeserta,
                     'user_aktif' => $userAktif,
                     'total_komunitas' => $totalKomunitas,
+                    'komunitas_aktif' => $komunitasAktif,
                     'sertifikat_terverifikasi' => $totalSertifikat,
-                    'persentase_keaktifan_komunitas' => 0, // Placeholder
+                    'persentase_keaktifan_komunitas' => $persentaseKeaktifan,
                 ],
                 'trend_sertifikat' => $trendSertifikat,
                 'recent_courses' => $recentCourses

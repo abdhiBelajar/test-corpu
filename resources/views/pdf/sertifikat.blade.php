@@ -46,7 +46,13 @@
         .nip {
             font-size: 16px;
             color: #6B7280;
-            margin-bottom: 40px;
+            margin-bottom: 5px;
+        }
+        .unit-kerja {
+            font-size: 15px;
+            color: #4B5563;
+            margin-bottom: 35px;
+            font-style: italic;
         }
         .details-container {
             width: 100%;
@@ -95,6 +101,7 @@
         <div class="subtitle">Diberikan Kepada:</div>
         <div class="name">{{ $sertifikat['nama_peserta'] ?? 'Nama Peserta' }}</div>
         <div class="nip">NIP: {{ $sertifikat['nip'] ?? '-' }}</div>
+        <div class="unit-kerja">{{ $sertifikat['unit_kerja'] ?? '-' }}</div>
         
         <div class="details-container">
             <table class="details-table">

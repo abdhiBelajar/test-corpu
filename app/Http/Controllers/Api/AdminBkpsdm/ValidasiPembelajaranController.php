@@ -9,7 +9,11 @@ class ValidasiPembelajaranController extends Controller
 {
     public function index()
     {
-        $pembelajaran = \App\Models\Pembelajaran::where('status', 'menunggu_approval')->get();
+        $pembelajaran = \App\Models\Pembelajaran::where('status', 'menunggu_approval')
+            ->with(['perancang', 'komunitas', 'pembelajaranJp'])
+            ->latest('pembelajaran_id')
+            ->get();
+
         return response()->json([
             'message' => 'Daftar Pembelajaran Menunggu Approval',
             'data' => $pembelajaran
@@ -23,36 +27,50 @@ class ValidasiPembelajaranController extends Controller
             'catatan' => 'nullable|string'
         ]);
 
-        $pembelajaran = \App\Models\Pembelajaran::where('status', 'menunggu_approval')->findOrFail($pembelajaran_id);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pembelajaran_id) {
+            $pembelajaran = \App\Models\Pembelajaran::where('status', 'menunggu_approval')
+                ->lockForUpdate()
+                ->findOrFail($pembelajaran_id);
 
-        // Rekam Validasi
-        $validasi = \App\Models\ValidasiPembelajaran::create([
-            'pembelajaran_id' => $pembelajaran->pembelajaran_id,
-            'divalidasi_oleh_pengguna_id' => $request->user()->pengguna_id,
-            'status_validasi' => $request->status_validasi,
-            'catatan' => $request->catatan,
-            'divalidasi_pada' => now()
-        ]);
+            // Validasi JP sebelum disetujui (sesuai SOP BKPSDM)
+            if ($request->status_validasi === 'disetujui') {
+                $jp = \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->first();
+                if (!$jp || !$jp->diverifikasi_oleh_bkpsdm) {
+                    return response()->json([
+                        'message' => 'Pembelajaran belum dapat disetujui karena Jam Pelajaran (JP) belum diverifikasi oleh BKPSDM.'
+                    ], 422);
+                }
+            }
 
-        // Update status Pembelajaran
-        if ($request->status_validasi === 'disetujui') {
-            $pembelajaran->update([
-                'status' => 'dipublikasikan',
-                'dipublikasikan_pada' => now()
+            // Rekam Validasi
+            $validasi = \App\Models\ValidasiPembelajaran::create([
+                'pembelajaran_id' => $pembelajaran->pembelajaran_id,
+                'divalidasi_oleh_pengguna_id' => $request->user()->pengguna_id,
+                'status_validasi' => $request->status_validasi,
+                'catatan' => $request->catatan,
+                'divalidasi_pada' => now()
             ]);
-        } else {
-            $pembelajaran->update([
-                'status' => 'ditolak'
-            ]);
-        }
 
-        return response()->json([
-            'message' => 'Validasi berhasil disimpan',
-            'data' => [
-                'pembelajaran' => $pembelajaran,
-                'validasi' => $validasi
-            ]
-        ]);
+            // Update status Pembelajaran
+            if ($request->status_validasi === 'disetujui') {
+                $pembelajaran->update([
+                    'status' => 'dipublikasikan',
+                    'dipublikasikan_pada' => now()
+                ]);
+            } else {
+                $pembelajaran->update([
+                    'status' => 'ditolak'
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Validasi berhasil disimpan',
+                'data' => [
+                    'pembelajaran' => $pembelajaran,
+                    'validasi' => $validasi
+                ]
+            ]);
+        });
     }
 
     public function show(string $id)

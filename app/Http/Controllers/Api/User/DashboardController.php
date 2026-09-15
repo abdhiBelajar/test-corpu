@@ -62,8 +62,17 @@ class DashboardController extends Controller
 
         // Rekomendasi (Kursus yang dipublikasikan dan belum diikuti)
         $enrolledIds = $pendaftaran->pluck('pembelajaran_id');
-        $rekomendasi = Pembelajaran::where('status', 'dipublikasikan')
-            ->whereNotIn('pembelajaran_id', $enrolledIds)
+        $rekomendasiQuery = Pembelajaran::where('status', 'dipublikasikan')
+            ->whereNotIn('pembelajaran_id', $enrolledIds);
+
+        // Batasi rekomendasi sesuai rumpun jabatan peserta
+        if (!empty($user->rumpun_jabatan)) {
+            $rekomendasiQuery->whereHas('komunitas', function($q) use ($user) {
+                $q->where('rumpun_jabatan', $user->rumpun_jabatan);
+            });
+        }
+
+        $rekomendasi = $rekomendasiQuery
             ->withCount('modul')
             ->with('pembelajaranJp')
             ->latest('dipublikasikan_pada')

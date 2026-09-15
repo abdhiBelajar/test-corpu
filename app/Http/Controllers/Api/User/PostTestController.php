@@ -170,7 +170,7 @@ class PostTestController extends Controller
                 $lockedPendaftaran->diselesaikan_pada = now();
                 $lockedPendaftaran->save();
 
-                Sertifikat::firstOrCreate([
+                $sertifikatModel = Sertifikat::firstOrCreate([
                     'pendaftaran_id' => $lockedPendaftaran->pendaftaran_id
                 ], [
                     'nomor_sertifikat' => 'CERT-' . strtoupper(uniqid()),
@@ -179,6 +179,29 @@ class PostTestController extends Controller
                     'tanggal_terbit' => now(),
                     'tautan_berkas' => '-'
                 ]);
+
+                // Hook sinkronisasi otomatis ke SIMPEG (PRD PST-11)
+                try {
+                    $pembelajaran = $postTest->pembelajaran;
+                    $jpDet = $pembelajaran ? $pembelajaran->pembelajaranJp->first() : null;
+                    $jplVal = $jpDet ? $jpDet->jp_final : 0;
+                    app(\App\Services\SimpegApiService::class)->syncSertifikat(
+                        $user->nip,
+                        $sertifikatModel->nomor_sertifikat,
+                        $pembelajaran ? $pembelajaran->judul_pembelajaran : 'Pelatihan',
+                        $nilaiAkhir,
+                        $jplVal
+                    );
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('SIMPEG sync warning: ' . $e->getMessage());
+                }
+            } else {
+                // Jika tidak lulus dan telah mencapai batas maksimal percobaan (PRD 7.3)
+                if ($percobaanKe >= $postTest->maks_percobaan) {
+                    $lockedPendaftaran->status_pendaftaran = 'tidak_lulus';
+                    $lockedPendaftaran->diselesaikan_pada = now();
+                    $lockedPendaftaran->save();
+                }
             }
 
             $pembelajaran = $postTest->pembelajaran;
