@@ -61,12 +61,22 @@ class KomunitasController extends Controller
             'nama_komunitas' => 'required|string|max:255|unique:komunitas',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'required|in:JPT,JA,JF,Pelaksana',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
+
+        $thumbnailPath = null;
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailPath = $request->file('thumbnail')->store('thumbnails/komunitas', 'public');
+        }
 
         $komunitas = \App\Models\Komunitas::create([
             'nama_komunitas' => $request->nama_komunitas,
             'deskripsi' => $request->deskripsi,
             'rumpun_jabatan' => $request->rumpun_jabatan,
+            'thumbnail' => $thumbnailPath,
             'dibuat_oleh_pengguna_id' => $request->user()->pengguna_id,
             'status' => 'aktif'
         ]);
@@ -100,12 +110,25 @@ class KomunitasController extends Controller
             'nama_komunitas' => 'nullable|string|max:255|unique:komunitas,nama_komunitas,' . $id . ',komunitas_id',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
-            'status' => 'nullable|in:aktif,nonaktif'
+            'status' => 'nullable|in:aktif,nonaktif',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
 
-        $komunitas->update($request->only([
+        $data = $request->only([
             'nama_komunitas', 'deskripsi', 'rumpun_jabatan', 'status'
-        ]));
+        ]);
+
+        if ($request->hasFile('thumbnail')) {
+            if ($komunitas->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($komunitas->thumbnail)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($komunitas->thumbnail);
+            }
+            $data['thumbnail'] = $request->file('thumbnail')->store('thumbnails/komunitas', 'public');
+        }
+
+        $komunitas->update($data);
 
         return response()->json([
             'message' => 'Komunitas berhasil diupdate',
@@ -119,6 +142,11 @@ class KomunitasController extends Controller
     public function destroy(string $id)
     {
         $komunitas = \App\Models\Komunitas::findOrFail($id);
+        
+        if ($komunitas->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($komunitas->thumbnail)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($komunitas->thumbnail);
+        }
+
         $komunitas->delete();
 
         return response()->json([

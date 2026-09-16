@@ -54,6 +54,10 @@ class ModulController extends Controller
                 \Illuminate\Validation\Rule::unique('modul')->where('pembelajaran_id', $pembelajaran_id)
             ],
             'info_tatap_muka' => 'nullable|string',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
 
         $maxUrutan = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)->max('urutan') ?? 0;
@@ -62,6 +66,11 @@ class ModulController extends Controller
         $deskripsiValue = $request->filled('gambaran_umum') 
             ? $request->gambaran_umum 
             : ($request->filled('deskripsi') ? $request->deskripsi : ('Gambaran umum modul ' . $request->judul_modul));
+
+        $thumbnailPath = null;
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailPath = $request->file('thumbnail')->store('thumbnails/modul', 'public');
+        }
 
         $modul = \App\Models\Modul::create([
             'pembelajaran_id' => $pembelajaran_id,
@@ -72,6 +81,7 @@ class ModulController extends Controller
             'durasi_total_menit' => 0,
             'jp_modul' => 0,
             'info_tatap_muka' => $request->info_tatap_muka,
+            'thumbnail' => $thumbnailPath,
         ]);
 
         return response()->json([
@@ -117,6 +127,10 @@ class ModulController extends Controller
                 \Illuminate\Validation\Rule::unique('modul')->where('pembelajaran_id', $modul->pembelajaran_id)->ignore($id, 'modul_id')
             ],
             'info_tatap_muka' => 'nullable|string',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
 
         $updateData = $request->only([
@@ -125,6 +139,13 @@ class ModulController extends Controller
 
         if ($request->has('deskripsi') && !$request->has('gambaran_umum')) {
             $updateData['gambaran_umum'] = $request->deskripsi;
+        }
+
+        if ($request->hasFile('thumbnail')) {
+            if ($modul->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($modul->thumbnail)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($modul->thumbnail);
+            }
+            $updateData['thumbnail'] = $request->file('thumbnail')->store('thumbnails/modul', 'public');
         }
 
         $modul->update($updateData);
@@ -147,6 +168,10 @@ class ModulController extends Controller
         $pembelajaran = \App\Models\Pembelajaran::find($pembelajaranId);
         if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
             $pembelajaran->update(['status' => 'draft']);
+        }
+
+        if ($modul->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($modul->thumbnail)) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($modul->thumbnail);
         }
 
         $modul->delete();

@@ -14,7 +14,18 @@ class Modul extends Model
     
     protected $guarded = [];
 
-    protected $appends = ['deskripsi'];
+    protected $appends = ['deskripsi', 'thumbnail_url'];
+
+    public function getThumbnailUrlAttribute()
+    {
+        if (!empty($this->attributes['thumbnail'])) {
+            if (filter_var($this->attributes['thumbnail'], FILTER_VALIDATE_URL)) {
+                return $this->attributes['thumbnail'];
+            }
+            return asset('storage/' . $this->attributes['thumbnail']);
+        }
+        return null;
+    }
 
     public function getDeskripsiAttribute()
     {

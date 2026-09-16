@@ -67,6 +67,10 @@ class PembelajaranController extends Controller
             'nilai_kelulusan' => 'required|numeric|min:0|max:100',
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
 
         $user = $request->user();
@@ -82,6 +86,11 @@ class PembelajaranController extends Controller
             ], 403);
         }
 
+        $thumbnailPath = null;
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailPath = $request->file('thumbnail')->store('thumbnails/pembelajaran', 'public');
+        }
+
         $pembelajaran = \App\Models\Pembelajaran::create([
             'komunitas_id' => $request->komunitas_id,
             'dirancang_oleh_pengguna_id' => $user->pengguna_id,
@@ -95,6 +104,7 @@ class PembelajaranController extends Controller
             'status' => 'draft',
             'tanggal_mulai' => $request->tanggal_mulai,
             'tanggal_selesai' => $request->tanggal_selesai,
+            'thumbnail' => $thumbnailPath,
         ]);
 
         return response()->json([
@@ -152,6 +162,10 @@ class PembelajaranController extends Controller
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
             'surat_pernyataan' => 'nullable|file|mimes:pdf|max:5120',
+            'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ], [
+            'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
+            'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
 
         $updateData = $request->only([
@@ -171,6 +185,13 @@ class PembelajaranController extends Controller
         if ($request->hasFile('surat_pernyataan')) {
             $path = $request->file('surat_pernyataan')->store('surat_pernyataan', 'public');
             $updateData['surat_pernyataan_url'] = '/storage/' . $path;
+        }
+
+        if ($request->hasFile('thumbnail')) {
+            if ($pembelajaran->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($pembelajaran->thumbnail)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($pembelajaran->thumbnail);
+            }
+            $updateData['thumbnail'] = $request->file('thumbnail')->store('thumbnails/pembelajaran', 'public');
         }
 
         $pembelajaran->update($updateData);
@@ -195,6 +216,11 @@ class PembelajaranController extends Controller
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($pembelajaran) {
+            // Hapus file thumbnail jika ada
+            if ($pembelajaran->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($pembelajaran->thumbnail)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($pembelajaran->thumbnail);
+            }
+
             // Hapus file surat pernyataan jika ada
             if ($pembelajaran->surat_pernyataan_url) {
                 $filePath = str_replace('/storage/', '', $pembelajaran->surat_pernyataan_url);

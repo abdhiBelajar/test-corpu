@@ -35,8 +35,8 @@ class KomunitasController extends Controller
                 'members' => $k->anggota_count,
                 'is_joined' => in_array($k->komunitas_id, $joinedKomunitasIds),
                 'can_join' => $canJoin,
-                // gambar dummy
-                'image' => 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2070&auto=format&fit=crop',
+                'thumbnail_url' => $k->thumbnail_url,
+                'image' => $k->thumbnail_url,
             ];
         });
 

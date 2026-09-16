@@ -33,6 +33,7 @@ Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')
     Route::apiResource('/pengguna', PenggunaController::class);
     
     // Komunitas
+    Route::post('/komunitas/{id}', [KomunitasController::class, 'update']);
     Route::apiResource('/komunitas', KomunitasController::class);
 
     // Approval Konten
@@ -63,11 +64,13 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     Route::get('/dashboard', [\App\Http\Controllers\Api\AdminKomunitas\DashboardController::class, 'index']);
 
     // Pembelajaran
+    Route::post('/pembelajaran/{id}', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'update']);
     Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);
     Route::post('/pembelajaran/{id}/ajukan-approval', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'ajukanApproval']);
     Route::get('/komunitas-saya', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'myKomunitas']);
 
     // Modul & Materi
+    Route::post('/modul/{id}', [\App\Http\Controllers\Api\AdminKomunitas\ModulController::class, 'update']);
     Route::apiResource('/pembelajaran.modul', \App\Http\Controllers\Api\AdminKomunitas\ModulController::class)->shallow();
     Route::apiResource('/modul.materi', \App\Http\Controllers\Api\AdminKomunitas\MateriController::class)->shallow();
 

@@ -56,7 +56,8 @@ class DashboardController extends Controller
                 'total_modul' => $currentCourseReg->pembelajaran->modul_count,
                 'jpl' => $jpCurrent ? $jpCurrent->jp_final : 0,
                 'next_module' => 'Lanjutkan ke Modul', // This could be dynamically resolved if needed
-                'image' => 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=2070&auto=format&fit=crop'
+                'image' => $currentCourseReg->pembelajaran->thumbnail_url,
+                'thumbnail_url' => $currentCourseReg->pembelajaran->thumbnail_url,
             ];
         }
 
@@ -89,7 +90,8 @@ class DashboardController extends Controller
                         'judul' => $c->judul_pembelajaran,
                         'jpl' => $jpRek ? ($jpRek->jp_final ?? $jpRek->jp_dihitung_sistem ?? 0) : 0,
                         'total_modul' => $c->modul_count,
-                        'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop'
+                        'image' => $c->thumbnail_url,
+                        'thumbnail_url' => $c->thumbnail_url,
                     ];
                 });
         }

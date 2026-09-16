@@ -73,7 +73,8 @@ class KatalogController extends Controller
                 'id' => $item->pembelajaran_id,
                 'komunitas_id' => $item->komunitas_id,
                 'nama_komunitas' => $item->komunitas->nama_komunitas ?? '-',
-                'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop', // placeholder
+                'image' => $item->thumbnail_url,
+                'thumbnail_url' => $item->thumbnail_url,
                 'category' => $item->kategori ?? 'Lainnya',
                 'title' => $item->judul_pembelajaran,
                 'description' => $item->deskripsi,

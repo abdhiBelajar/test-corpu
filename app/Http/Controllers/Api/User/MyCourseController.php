@@ -55,7 +55,8 @@ class MyCourseController extends Controller
             return [
                 'pendaftaran_id' => $item->pendaftaran_id,
                 'pembelajaran_id' => $item->pembelajaran_id,
-                'image' => 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=2070&auto=format&fit=crop',
+                'image' => $item->pembelajaran->thumbnail_url,
+                'thumbnail_url' => $item->pembelajaran->thumbnail_url,
                 'category' => $item->pembelajaran->kategori ?? 'Lainnya',
                 'title' => $item->pembelajaran->judul_pembelajaran,
                 'description' => $item->pembelajaran->deskripsi,
