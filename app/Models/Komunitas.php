@@ -16,9 +16,6 @@ class Komunitas extends Model
     
     protected $guarded = [];
 
-    protected $casts = [
-        'sub_bidang_tersedia_json' => 'array',
-    ];
 
     public function pembuat()
     {

@@ -87,6 +87,7 @@ class MonitoringController extends Controller
                 'pengguna_id' => $p->pengguna_id,
                 'nama' => $p->pengguna->nama_lengkap ?? 'Peserta',
                 'nip' => $p->pengguna->nip ?? '-',
+                'rumpun_jabatan' => $p->pengguna->rumpun_jabatan ?? '-',
                 'unit_kerja' => $p->pengguna->unit_kerja ?? 'Pemerintah Kabupaten Buleleng',
                 'judul_pembelajaran' => $p->pembelajaran->judul_pembelajaran ?? '-',
                 'progres' => round($p->persentase_progres, 1),

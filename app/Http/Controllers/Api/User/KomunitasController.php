@@ -14,26 +14,27 @@ class KomunitasController extends Controller
 
         $query = Komunitas::withCount(['pembelajaran', 'anggota']);
 
-        // Batasi komunitas sesuai rumpun jabatan peserta (PRD PST-2, Bab 5)
-        if (!empty($user->rumpun_jabatan)) {
-            $query->where('rumpun_jabatan', $user->rumpun_jabatan);
-        }
-
+        // Tampilkan semua komunitas yang ada (tidak difilter lagi)
         $komunitas = $query->get();
 
         // Ambil daftar komunitas yang di-join oleh user ini
         $joinedKomunitasIds = $user->komunitas()->pluck('komunitas.komunitas_id')->toArray();
 
-        $data = $komunitas->map(function ($k) use ($joinedKomunitasIds) {
+        $userRumpun = $user->rumpun_jabatan;
+
+        $data = $komunitas->map(function ($k) use ($joinedKomunitasIds, $userRumpun) {
+            // User hanya dapat memilih/join komunitas yang sesuai dengan rumpun jabatannya
+            $canJoin = empty($userRumpun) || ($k->rumpun_jabatan === $userRumpun);
+
             return [
                 'id' => $k->komunitas_id,
                 'title' => $k->nama_komunitas,
                 'description' => $k->deskripsi,
                 'category' => $k->rumpun_jabatan,
-                'sub_bidang_tersedia' => $k->sub_bidang_tersedia_json ?? [],
                 'courses' => $k->pembelajaran_count,
                 'members' => $k->anggota_count,
                 'is_joined' => in_array($k->komunitas_id, $joinedKomunitasIds),
+                'can_join' => $canJoin,
                 // gambar dummy
                 'image' => 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2070&auto=format&fit=crop',
             ];
@@ -41,6 +42,7 @@ class KomunitasController extends Controller
 
         return response()->json([
             'success' => true,
+            'user_rumpun_jabatan' => $userRumpun,
             'data' => $data
         ]);
     }
@@ -61,27 +63,13 @@ class KomunitasController extends Controller
             ], 403);
         }
 
-        // Khusus rumpun JF: Peserta wajib memilih sub-bidang (PRD PST-3)
-        if ($komunitas->rumpun_jabatan === 'JF') {
-            $subBidangTersedia = $komunitas->sub_bidang_tersedia_json ?? [];
-            if (!empty($subBidangTersedia)) {
-                $subBidang = $request->input('sub_bidang');
-                if (!$subBidang || !in_array($subBidang, $subBidangTersedia)) {
-                    return response()->json([
-                        'message' => 'Silakan pilih sub-bidang yang valid untuk komunitas rumpun JF ini.',
-                        'sub_bidang_tersedia' => $subBidangTersedia
-                    ], 422);
-                }
-            }
-        }
-
         // Cek apakah sudah bergabung
         if ($user->komunitas()->where('komunitas_pengguna.komunitas_id', $id)->exists()) {
             return response()->json(['message' => 'Anda sudah bergabung di komunitas ini'], 400);
         }
 
         // Gabung komunitas
-        $user->komunitas()->attach($id);
+        $user->komunitas()->attach($id, ['bergabung_pada' => now()]);
 
         return response()->json([
             'success' => true,

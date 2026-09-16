@@ -60,34 +60,39 @@ class DashboardController extends Controller
             ];
         }
 
-        // Rekomendasi (Kursus yang dipublikasikan dan belum diikuti)
+        // Rekomendasi (Kursus yang dipublikasikan dari komunitas yang diikuti dan belum diikuti)
+        $joinedKomunitasIds = $user->komunitas()->pluck('komunitas.komunitas_id')->toArray();
         $enrolledIds = $pendaftaran->pluck('pembelajaran_id');
-        $rekomendasiQuery = Pembelajaran::where('status', 'dipublikasikan')
-            ->whereNotIn('pembelajaran_id', $enrolledIds);
+        $rekomendasi = [];
 
-        // Batasi rekomendasi sesuai rumpun jabatan peserta
-        if (!empty($user->rumpun_jabatan)) {
-            $rekomendasiQuery->whereHas('komunitas', function($q) use ($user) {
-                $q->where('rumpun_jabatan', $user->rumpun_jabatan);
-            });
+        if (!empty($joinedKomunitasIds)) {
+            $rekomendasiQuery = Pembelajaran::where('status', 'dipublikasikan')
+                ->whereIn('komunitas_id', $joinedKomunitasIds)
+                ->whereNotIn('pembelajaran_id', $enrolledIds);
+
+            if (!empty($user->rumpun_jabatan)) {
+                $rekomendasiQuery->whereHas('komunitas', function($q) use ($user) {
+                    $q->where('rumpun_jabatan', $user->rumpun_jabatan);
+                });
+            }
+
+            $rekomendasi = $rekomendasiQuery
+                ->withCount('modul')
+                ->with('pembelajaranJp')
+                ->latest('dipublikasikan_pada')
+                ->take(3)
+                ->get()
+                ->map(function ($c) {
+                    $jpRek = $c->pembelajaranJp->first();
+                    return [
+                        'pembelajaran_id' => $c->pembelajaran_id,
+                        'judul' => $c->judul_pembelajaran,
+                        'jpl' => $jpRek ? ($jpRek->jp_final ?? $jpRek->jp_dihitung_sistem ?? 0) : 0,
+                        'total_modul' => $c->modul_count,
+                        'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop'
+                    ];
+                });
         }
-
-        $rekomendasi = $rekomendasiQuery
-            ->withCount('modul')
-            ->with('pembelajaranJp')
-            ->latest('dipublikasikan_pada')
-            ->take(3)
-            ->get()
-            ->map(function ($c) {
-                $jpRek = $c->pembelajaranJp->first();
-                return [
-                    'pembelajaran_id' => $c->pembelajaran_id,
-                    'judul' => $c->judul_pembelajaran,
-                    'jpl' => $jpRek ? $jpRek->jp_final : 0,
-                    'total_modul' => $c->modul_count,
-                    'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop'
-                ];
-            });
 
         // Aktivitas Terakhir
         $activities = [];

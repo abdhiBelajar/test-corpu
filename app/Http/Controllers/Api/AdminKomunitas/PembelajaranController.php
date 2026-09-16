@@ -241,13 +241,6 @@ class PembelajaranController extends Controller
             'surat_pernyataan' => 'nullable|file|mimes:pdf|max:5120',
         ]);
 
-        // Cek apakah surat pernyataan tersedia (bisa yang baru diupload atau sudah ada sebelumnya)
-        if (!$request->hasFile('surat_pernyataan') && empty($pembelajaran->surat_pernyataan_url)) {
-            return response()->json([
-                'message' => 'Surat pernyataan keabsahan konten (format PDF) wajib diunggah sebelum mengajukan approval.'
-            ], 422);
-        }
-
         // Cek validasi 3 unsur wajib (Overview, Substansi, Evaluasi dengan soal)
         $moduls = \App\Models\Modul::where('pembelajaran_id', $id)->get();
         if ($moduls->isEmpty()) {

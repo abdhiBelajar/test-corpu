@@ -18,7 +18,6 @@ class AdminKomunitasSeeder extends Seeder
             'kata_sandi_hash' => \Illuminate\Support\Facades\Hash::make('admin123'),
             'peran' => 'admin_komunitas',
             'rumpun_jabatan' => 'JF',
-            'sub_bidang_jf' => 'Kesehatan',
             'status' => 'aktif',
         ]);
 
@@ -30,7 +29,6 @@ class AdminKomunitasSeeder extends Seeder
             'nama_komunitas' => 'Komunitas JF Kesehatan',
             'deskripsi' => 'Komunitas Belajar untuk Jabatan Fungsional Kesehatan',
             'rumpun_jabatan' => 'JF',
-            'sub_bidang_tersedia_json' => json_encode(['Kesehatan']),
             'status' => 'aktif',
         ]);
 

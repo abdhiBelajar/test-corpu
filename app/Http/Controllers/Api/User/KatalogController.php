@@ -13,23 +13,39 @@ class KatalogController extends Controller
     {
         $user = $request->user();
         
-        $query = Pembelajaran::where('status', 'dipublikasikan')
-            ->withCount('modul')
-            ->with('pembelajaranJp');
+        // Ambil daftar komunitas yang telah diikuti user
+        $joinedKomunitas = $user->komunitas()
+            ->select('komunitas.komunitas_id', 'komunitas.nama_komunitas', 'komunitas.rumpun_jabatan')
+            ->get();
+        $joinedKomunitasIds = $joinedKomunitas->pluck('komunitas_id')->toArray();
 
-        // Batasi katalog sesuai rumpun jabatan peserta (PRD PST-2, Bab 5)
-        if (!empty($user->rumpun_jabatan)) {
-            $query->whereHas('komunitas', function($q) use ($user) {
-                $q->where('rumpun_jabatan', $user->rumpun_jabatan);
-            });
+        // Jika user belum bergabung ke komunitas mana pun, katalog tidak menampilkan pembelajaran
+        if (empty($joinedKomunitasIds)) {
+            return response()->json([
+                'message' => 'Anda belum bergabung dengan komunitas manapun. Silakan bergabung dengan komunitas terlebih dahulu.',
+                'has_joined_community' => false,
+                'joined_communities' => [],
+                'data' => [
+                    'current_page' => 1,
+                    'data' => [],
+                    'total' => 0,
+                    'last_page' => 1
+                ]
+            ]);
+        }
+
+        $query = Pembelajaran::where('status', 'dipublikasikan')
+            ->whereIn('komunitas_id', $joinedKomunitasIds)
+            ->withCount('modul')
+            ->with(['pembelajaranJp', 'komunitas:komunitas_id,nama_komunitas,rumpun_jabatan']);
+
+        // Filter komunitas spesifik (jika dipilih)
+        if ($request->filled('komunitas_id') && $request->komunitas_id !== 'all') {
+            $query->where('komunitas_id', $request->komunitas_id);
         }
 
         if ($request->has('kategori') && $request->kategori !== 'Semua Kategori') {
             $query->where('kategori', $request->kategori);
-        }
-
-        if ($request->has('komunitas_id') && !empty($request->komunitas_id)) {
-            $query->where('komunitas_id', $request->komunitas_id);
         }
 
         if ($request->has('search') && !empty($request->search)) {
@@ -55,11 +71,13 @@ class KatalogController extends Controller
             $jp = $item->pembelajaranJp->first();
             return [
                 'id' => $item->pembelajaran_id,
+                'komunitas_id' => $item->komunitas_id,
+                'nama_komunitas' => $item->komunitas->nama_komunitas ?? '-',
                 'image' => 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop', // placeholder
                 'category' => $item->kategori ?? 'Lainnya',
                 'title' => $item->judul_pembelajaran,
                 'description' => $item->deskripsi,
-                'jpl' => $jp ? $jp->jp_final : 0,
+                'jpl' => $jp ? ($jp->jp_final ?? $jp->jp_dihitung_sistem ?? 0) : 0,
                 'modules' => $item->modul_count,
                 'isEnrolled' => in_array($item->pembelajaran_id, $enrolledIds)
             ];
@@ -69,6 +87,8 @@ class KatalogController extends Controller
 
         return response()->json([
             'message' => 'Katalog berhasil diambil',
+            'has_joined_community' => true,
+            'joined_communities' => $joinedKomunitas,
             'data' => $pembelajaran
         ]);
     }
@@ -78,6 +98,15 @@ class KatalogController extends Controller
         $user = $request->user();
         
         $pembelajaran = Pembelajaran::with('komunitas')->where('status', 'dipublikasikan')->findOrFail($id);
+
+        // Validasi: Peserta HARUS sudah bergabung ke komunitas penyelenggara
+        $isMember = $user->komunitas()->where('komunitas_pengguna.komunitas_id', $pembelajaran->komunitas_id)->exists();
+        if (!$isMember) {
+            $namaKomunitas = $pembelajaran->komunitas->nama_komunitas ?? 'komunitas terkait';
+            return response()->json([
+                'message' => 'Anda harus bergabung dengan "' . $namaKomunitas . '" terlebih dahulu sebelum dapat mendaftar pelatihan ini.'
+            ], 403);
+        }
 
         // Validasi batas rumpun jabatan (PRD PST-2, Bab 5)
         if (!empty($user->rumpun_jabatan) && $pembelajaran->komunitas && $pembelajaran->komunitas->rumpun_jabatan !== $user->rumpun_jabatan) {

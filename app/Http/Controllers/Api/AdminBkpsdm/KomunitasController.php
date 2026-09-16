@@ -61,15 +61,12 @@ class KomunitasController extends Controller
             'nama_komunitas' => 'required|string|max:255|unique:komunitas',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'required|in:JPT,JA,JF,Pelaksana',
-            'sub_bidang_tersedia_json' => 'nullable|array',
-            'sub_bidang_tersedia_json.*' => 'string|max:100'
         ]);
 
         $komunitas = \App\Models\Komunitas::create([
             'nama_komunitas' => $request->nama_komunitas,
             'deskripsi' => $request->deskripsi,
             'rumpun_jabatan' => $request->rumpun_jabatan,
-            'sub_bidang_tersedia_json' => $request->sub_bidang_tersedia_json,
             'dibuat_oleh_pengguna_id' => $request->user()->pengguna_id,
             'status' => 'aktif'
         ]);
@@ -103,13 +100,11 @@ class KomunitasController extends Controller
             'nama_komunitas' => 'nullable|string|max:255|unique:komunitas,nama_komunitas,' . $id . ',komunitas_id',
             'deskripsi' => 'nullable|string',
             'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
-            'sub_bidang_tersedia_json' => 'nullable|array',
-            'sub_bidang_tersedia_json.*' => 'string|max:100',
             'status' => 'nullable|in:aktif,nonaktif'
         ]);
 
         $komunitas->update($request->only([
-            'nama_komunitas', 'deskripsi', 'rumpun_jabatan', 'sub_bidang_tersedia_json', 'status'
+            'nama_komunitas', 'deskripsi', 'rumpun_jabatan', 'status'
         ]));
 
         return response()->json([

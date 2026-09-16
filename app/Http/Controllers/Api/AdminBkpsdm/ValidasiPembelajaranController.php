@@ -24,7 +24,8 @@ class ValidasiPembelajaranController extends Controller
     {
         $request->validate([
             'status_validasi' => 'required|in:disetujui,ditolak',
-            'catatan' => 'nullable|string'
+            'catatan' => 'nullable|string',
+            'jp_final' => 'nullable|numeric|min:0|max:100'
         ]);
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pembelajaran_id) {
@@ -32,13 +33,30 @@ class ValidasiPembelajaranController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($pembelajaran_id);
 
-            // Validasi JP sebelum disetujui (sesuai SOP BKPSDM)
+            // Validasi & Verifikasi JP jika disetujui (sesuai SOP BKPSDM)
             if ($request->status_validasi === 'disetujui') {
                 $jp = \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->first();
-                if (!$jp || !$jp->diverifikasi_oleh_bkpsdm) {
-                    return response()->json([
-                        'message' => 'Pembelajaran belum dapat disetujui karena Jam Pelajaran (JP) belum diverifikasi oleh BKPSDM.'
-                    ], 422);
+                
+                $finalJp = $request->filled('jp_final') 
+                    ? (float) $request->jp_final 
+                    : ($jp ? ($jp->jp_final ?: ($jp->jp_dihitung_sistem ?: 0)) : 0);
+
+                if ($jp) {
+                    $jp->update([
+                        'jp_final' => $finalJp,
+                        'diverifikasi_oleh_bkpsdm' => true,
+                        'diverifikasi_pada' => now()
+                    ]);
+                } else {
+                    \App\Models\PembelajaranJp::create([
+                        'pembelajaran_id' => $pembelajaran->pembelajaran_id,
+                        'jenis_pelatihan' => 'formal',
+                        'durasi_menit' => 0,
+                        'jp_dihitung_sistem' => $finalJp,
+                        'jp_final' => $finalJp,
+                        'diverifikasi_oleh_bkpsdm' => true,
+                        'diverifikasi_pada' => now()
+                    ]);
                 }
             }
 
