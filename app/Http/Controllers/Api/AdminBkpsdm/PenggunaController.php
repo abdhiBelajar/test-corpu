@@ -27,13 +27,23 @@ class PenggunaController extends Controller
             });
         }
 
-        // Mendukung paginasi default 25 atau param all=true untuk backward compatibility
-        if ($request->boolean('all')) {
-            $pengguna = $query->latest('dibuat_pada')->get();
-        } else {
+        if ($request->has('page') || $request->has('per_page')) {
             $perPage = (int) $request->input('per_page', 25);
             $pengguna = $query->latest('dibuat_pada')->paginate($perPage);
+
+            return response()->json([
+                'message' => 'Daftar Pengguna',
+                'data' => $pengguna->items(),
+                'meta' => [
+                    'current_page' => $pengguna->currentPage(),
+                    'last_page' => $pengguna->lastPage(),
+                    'per_page' => $pengguna->perPage(),
+                    'total' => $pengguna->total(),
+                ]
+            ]);
         }
+
+        $pengguna = $query->latest('dibuat_pada')->get();
 
         return response()->json([
             'message' => 'Daftar Pengguna',
