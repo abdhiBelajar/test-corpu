@@ -32,6 +32,8 @@ class CourseDetailController extends Controller
 
         $progresMateri = [];
         if ($pendaftaran) {
+            \App\Services\CourseProgressService::syncUserProgress($pendaftaran);
+            $pendaftaran->refresh();
             $progresMateri = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
                 ->pluck('apakah_selesai', 'materi_id')
                 ->toArray();

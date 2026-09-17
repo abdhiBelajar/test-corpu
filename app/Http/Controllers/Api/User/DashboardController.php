@@ -23,11 +23,32 @@ class DashboardController extends Controller
             }])
             ->get();
 
-        $aktif = $pendaftaran->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan', 'menunggu_post_test'])->count();
-        $selesai = $pendaftaran->whereIn('status_pendaftaran', ['selesai', 'lulus'])->count();
+        // Sinkronisasi otomatis setiap progres pendaftaran user terhadap modul/materi terbaru
+        foreach ($pendaftaran as $p) {
+            \App\Services\CourseProgressService::syncUserProgress($p);
+        }
+
+        // Ambil ulang data pendaftaran setelah sinkronisasi
+        $pendaftaran = PendaftaranPembelajaran::where('pengguna_id', $penggunaId)
+            ->with(['pembelajaran' => function($q) {
+                $q->withCount('modul')->with('pembelajaranJp');
+            }])
+            ->get();
+
+        // Pelatihan aktif: pelatihan yang belum selesai 100% dan bukan status selesai/lulus
+        $aktif = $pendaftaran->filter(function($p) {
+            return (float)$p->persentase_progres < 100 && !in_array($p->status_pendaftaran, ['selesai', 'lulus']);
+        })->count();
+
+        // Pelatihan selesai: status selesai/lulus atau progres 100%
+        $selesai = $pendaftaran->filter(function($p) {
+            return (float)$p->persentase_progres >= 100 || in_array($p->status_pendaftaran, ['selesai', 'lulus']);
+        })->count();
 
         // Total JPL dari pelatihan yang selesai/lulus
-        $pembelajaranIdsSelesai = $pendaftaran->whereIn('status_pendaftaran', ['selesai', 'lulus'])->pluck('pembelajaran_id');
+        $pembelajaranIdsSelesai = $pendaftaran->filter(function($p) {
+            return (float)$p->persentase_progres >= 100 || in_array($p->status_pendaftaran, ['selesai', 'lulus']);
+        })->pluck('pembelajaran_id');
         $totalJpl = PembelajaranJp::whereIn('pembelajaran_id', $pembelajaranIdsSelesai)->sum('jp_final');
 
         // Sertifikat
@@ -35,29 +56,86 @@ class DashboardController extends Controller
             $q->where('pengguna_id', $penggunaId);
         })->count();
 
-        // Current Course (terakhir diakses/didaftar)
+        // Current Course: Pelatihan yang sedang dijalani (< 100%) dengan progress paling sedikit diantara kursus yang lain
         $currentCourseReg = PendaftaranPembelajaran::where('pengguna_id', $penggunaId)
-            ->whereIn('status_pendaftaran', ['terdaftar', 'sedang_berjalan'])
-            ->with(['pembelajaran' => function($q) {
-                $q->withCount('modul')->with('pembelajaranJp');
-            }])
+            ->where('persentase_progres', '<', 100)
+            ->whereNotIn('status_pendaftaran', ['selesai', 'lulus'])
+            ->with([
+                'pembelajaran' => function($q) {
+                    $q->with([
+                        'modul' => function($mq) {
+                            $mq->orderBy('urutan', 'asc')->with(['materi', 'kuis']);
+                        },
+                        'pembelajaranJp'
+                    ])->withCount('modul');
+                }
+            ])
+            ->orderBy('persentase_progres', 'asc') // Menampilkan kursus dengan progres paling sedikit
             ->orderBy('terdaftar_pada', 'desc')
             ->first();
 
         $currentCourse = null;
         if ($currentCourseReg && $currentCourseReg->pembelajaran) {
-            $jpCurrent = $currentCourseReg->pembelajaran->pembelajaranJp->first();
+            $pemb = $currentCourseReg->pembelajaran;
+            $jpCurrent = $pemb->pembelajaranJp->first();
+
+            // Cari modul yang belum selesai untuk teks "SELANJUTNYA"
+            $progresMateriIds = \App\Models\ProgresMateri::where('pendaftaran_id', $currentCourseReg->pendaftaran_id)
+                ->where('apakah_selesai', true)
+                ->pluck('materi_id')
+                ->toArray();
+
+            $riwayatKuisIds = \App\Models\RiwayatKuis::where('pendaftaran_id', $currentCourseReg->pendaftaran_id)
+                ->where('apakah_lulus', true)
+                ->pluck('kuis_id')
+                ->toArray();
+
+            $nextModuleTitle = null;
+            if ($pemb->modul && $pemb->modul->count() > 0) {
+                foreach ($pemb->modul as $m) {
+                    $materiBelumSelesai = $m->materi->first(function($mat) use ($progresMateriIds) {
+                        return !in_array($mat->materi_id, $progresMateriIds);
+                    });
+
+                    $kuisBelumSelesai = $m->kuis && !in_array($m->kuis->kuis_id, $riwayatKuisIds);
+
+                    if ($materiBelumSelesai || $kuisBelumSelesai) {
+                        $nextModuleTitle = 'Modul ' . $m->urutan . ' - ' . $m->judul_modul;
+                        break;
+                    }
+                }
+            }
+
+            if (!$nextModuleTitle) {
+                $firstModul = $pemb->modul ? $pemb->modul->first() : null;
+                $nextModuleTitle = $firstModul ? ('Modul ' . $firstModul->urutan . ' - ' . $firstModul->judul_modul) : 'Lanjutkan Pembelajaran';
+            }
+
+            // Dapatkan URL thumbnail yang valid
+            $thumbnail = $pemb->thumbnail_url;
+            if ($thumbnail && !str_starts_with($thumbnail, 'http')) {
+                $thumbnail = url($thumbnail);
+            }
+
+            $jpl = $jpCurrent ? ($jpCurrent->jp_final ?? $jpCurrent->jp_dihitung_sistem ?? 0) : 0;
+            if (!$jpl && $pemb->modul) {
+                $jpl = (float)$pemb->modul->sum('jp_modul');
+            }
+            if (!$jpl) {
+                $jpl = 1;
+            }
+
             $currentCourse = [
                 'pendaftaran_id' => $currentCourseReg->pendaftaran_id,
-                'pembelajaran_id' => $currentCourseReg->pembelajaran->pembelajaran_id,
-                'judul' => $currentCourseReg->pembelajaran->judul_pembelajaran,
-                'kategori' => $currentCourseReg->pembelajaran->kategori,
-                'progress' => $currentCourseReg->persentase_progres,
-                'total_modul' => $currentCourseReg->pembelajaran->modul_count,
-                'jpl' => $jpCurrent ? $jpCurrent->jp_final : 0,
-                'next_module' => 'Lanjutkan ke Modul', // This could be dynamically resolved if needed
-                'image' => $currentCourseReg->pembelajaran->thumbnail_url,
-                'thumbnail_url' => $currentCourseReg->pembelajaran->thumbnail_url,
+                'pembelajaran_id' => $pemb->pembelajaran_id,
+                'judul' => $pemb->judul_pembelajaran,
+                'kategori' => $pemb->kategori,
+                'progress' => round((float)$currentCourseReg->persentase_progres, 0),
+                'total_modul' => $pemb->modul_count,
+                'jpl' => $jpl,
+                'next_module' => $nextModuleTitle,
+                'image' => $thumbnail,
+                'thumbnail_url' => $thumbnail,
             ];
         }
 

@@ -18,4 +18,14 @@ class RiwayatKuis extends Model
         'jawaban_peserta_json' => 'array',
         'snapshot_soal_json' => 'array',
     ];
+
+    public function kuis()
+    {
+        return $this->belongsTo(Kuis::class, 'kuis_id');
+    }
+
+    public function pendaftaran()
+    {
+        return $this->belongsTo(PendaftaranPembelajaran::class, 'pendaftaran_id');
+    }
 }

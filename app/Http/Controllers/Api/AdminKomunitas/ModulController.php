@@ -84,6 +84,8 @@ class ModulController extends Controller
             'thumbnail' => $thumbnailPath,
         ]);
 
+        \App\Services\CourseProgressService::syncCourseParticipants($pembelajaran_id);
+
         return response()->json([
             'message' => 'Modul berhasil ditambahkan',
             'data' => $modul->load('materi', 'kuis.soalKuis')
@@ -150,6 +152,8 @@ class ModulController extends Controller
 
         $modul->update($updateData);
 
+        \App\Services\CourseProgressService::syncCourseParticipants($modul->pembelajaran_id);
+
         return response()->json([
             'message' => 'Modul berhasil diperbarui',
             'data' => $modul
@@ -183,6 +187,8 @@ class ModulController extends Controller
             'durasi_menit' => $totalDurasi,
             'jp_dihitung_sistem' => $totalJp,
         ]);
+
+        \App\Services\CourseProgressService::syncCourseParticipants($pembelajaranId);
 
         return response()->json([
             'message' => 'Modul berhasil dihapus'

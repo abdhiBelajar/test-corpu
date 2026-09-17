@@ -12,7 +12,15 @@ class ProgresMateri extends Model
     const CREATED_AT = null;
     const UPDATED_AT = null; // No updated_at equivalent in schema, only diselesaikan_pada
     
-    public $timestamps = false;
-    
     protected $guarded = [];
+
+    public function materi()
+    {
+        return $this->belongsTo(Materi::class, 'materi_id');
+    }
+
+    public function pendaftaran()
+    {
+        return $this->belongsTo(PendaftaranPembelajaran::class, 'pendaftaran_id');
+    }
 }

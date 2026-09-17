@@ -24,8 +24,23 @@ class Pembelajaran extends Model
             if (filter_var($this->attributes['thumbnail'], FILTER_VALIDATE_URL)) {
                 return $this->attributes['thumbnail'];
             }
-            return asset('storage/' . $this->attributes['thumbnail']);
+            $clean = ltrim($this->attributes['thumbnail'], '/');
+            if (str_starts_with($clean, 'storage/')) {
+                $clean = substr($clean, 8);
+            }
+            return asset('storage/' . $clean);
         }
+
+        // Fallback: jika cover kursus belum diatur, gunakan thumbnail modul yang ada
+        try {
+            $modulWithThumb = $this->moduls()->whereNotNull('thumbnail')->where('thumbnail', '!=', '')->first();
+            if ($modulWithThumb && !empty($modulWithThumb->thumbnail_url)) {
+                return $modulWithThumb->thumbnail_url;
+            }
+        } catch (\Throwable $e) {
+            // ignore fallback error if relation fails
+        }
+
         return 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop';
     }
 

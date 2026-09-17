@@ -22,7 +22,11 @@ class Modul extends Model
             if (filter_var($this->attributes['thumbnail'], FILTER_VALIDATE_URL)) {
                 return $this->attributes['thumbnail'];
             }
-            return asset('storage/' . $this->attributes['thumbnail']);
+            $clean = ltrim($this->attributes['thumbnail'], '/');
+            if (str_starts_with($clean, 'storage/')) {
+                $clean = substr($clean, 8);
+            }
+            return asset('storage/' . $clean);
         }
         return null;
     }

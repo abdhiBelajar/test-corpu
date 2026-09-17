@@ -14,6 +14,11 @@ class MyCourseController extends Controller
 
         $status = $request->input('status', 'all');
 
+        $userAllPendaftarans = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)->get();
+        foreach ($userAllPendaftarans as $uap) {
+            \App\Services\CourseProgressService::syncUserProgress($uap);
+        }
+
         $query = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)
             ->with(['pembelajaran' => function($q) {
                 $q->withCount('modul')->with('pembelajaranJp');

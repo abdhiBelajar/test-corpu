@@ -109,6 +109,7 @@ class MateriController extends Controller
         ]);
 
         $this->rekalkulasiDurasiModul($modul_id);
+        \App\Services\CourseProgressService::syncCourseParticipants($modul->pembelajaran_id);
 
         return response()->json([
             'message' => 'Materi berhasil ditambahkan',
@@ -162,6 +163,7 @@ class MateriController extends Controller
         $materi->update($updateData);
 
         $this->rekalkulasiDurasiModul($modul->modul_id);
+        \App\Services\CourseProgressService::syncCourseParticipants($modul->pembelajaran_id);
 
         return response()->json([
             'message' => 'Materi berhasil diperbarui',
@@ -189,9 +191,11 @@ class MateriController extends Controller
             \Illuminate\Support\Facades\Storage::disk('public')->delete($filePath);
         }
 
+        $pembelajaranId = $modul->pembelajaran_id;
         $materi->delete();
         
         $this->rekalkulasiDurasiModul($modul->modul_id);
+        \App\Services\CourseProgressService::syncCourseParticipants($pembelajaranId);
 
         return response()->json([
             'message' => 'Materi berhasil dihapus'

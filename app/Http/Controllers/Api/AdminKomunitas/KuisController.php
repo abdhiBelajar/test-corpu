@@ -91,6 +91,8 @@ class KuisController extends Controller
 
             \Illuminate\Support\Facades\DB::commit();
 
+            \App\Services\CourseProgressService::syncCourseParticipants($modul->pembelajaran_id);
+
             return response()->json([
                 'message' => 'Kuis dan soal berhasil ditambahkan',
                 'data' => $kuis->load('soalKuis')
@@ -196,7 +198,9 @@ class KuisController extends Controller
             $pembelajaran->update(['status' => 'draft']);
         }
 
+        $pembelajaranId = $modul->pembelajaran_id;
         $kuis->delete();
+        \App\Services\CourseProgressService::syncCourseParticipants($pembelajaranId);
 
         return response()->json([
             'message' => 'Kuis berhasil dihapus'
