@@ -51,15 +51,44 @@ class KuisController extends Controller
         // Format soal untuk dikirim
         $soal = $kuis->soalKuis->map(function($s) {
             $pilihan = is_string($s->pilihan_jawaban_json) ? json_decode($s->pilihan_jawaban_json, true) : $s->pilihan_jawaban_json;
-            return [
+            $formatted = [
                 'soal_kuis_id' => $s->soal_kuis_id,
+                'tipe_soal' => $s->tipe_soal ?? 'pilihan_ganda',
                 'teks_soal' => $s->teks_soal,
-                'pilihan_jawaban' => $pilihan
+                'pilihan_jawaban' => $pilihan,
+                'arah' => $s->arah,
+                'nomor_urut' => $s->nomor_urut,
+                'baris_mulai' => $s->baris_mulai,
+                'kolom_mulai' => $s->kolom_mulai,
+                'panjang_kata' => mb_strlen($s->kunci_jawaban ?? ''),
+                'bobot_nilai' => (float) ($s->bobot_nilai ?? 1),
             ];
+
+            if ($s->tipe_soal === 'drag_drop') {
+                // Untuk drag_drop, acak seluruh bank opsi dan jangan bocorkan kunci jawaban
+                $options = [];
+                if (isset($pilihan['all_options']) && is_array($pilihan['all_options'])) {
+                    $options = $pilihan['all_options'];
+                } elseif (isset($pilihan['blanks']) && is_array($pilihan['blanks'])) {
+                    $keys = array_column($pilihan['blanks'], 'kunci');
+                    $dist = $pilihan['distractors'] ?? [];
+                    $options = array_merge($keys, $dist);
+                }
+                shuffle($options);
+
+                $blanksCount = isset($pilihan['blanks']) ? count($pilihan['blanks']) : 0;
+                $formatted['pilihan_jawaban'] = array_values(array_unique($options));
+                $formatted['jumlah_blank'] = $blanksCount;
+            }
+
+            return $formatted;
         });
 
         if ($kuis->acak_soal) {
-            $soal = $soal->shuffle();
+            $hasTts = $kuis->soalKuis->contains('tipe_soal', 'tts');
+            if (!$hasTts) {
+                $soal = $soal->shuffle();
+            }
         }
 
         return response()->json([
@@ -72,6 +101,7 @@ class KuisController extends Controller
                 'durasi_menit' => $kuis->durasi_menit,
                 'percobaan_sekarang' => $percobaanKe + 1,
                 'maks_percobaan' => $kuis->maks_percobaan,
+                'grid_config' => $kuis->grid_config_json,
                 'soal' => $soal->values()
             ]
         ]);
@@ -126,7 +156,7 @@ class KuisController extends Controller
             }
 
             // Hitung nilai
-            $jawabanUser = $request->jawaban; // array of ['soal_kuis_id' => x, 'jawaban' => 'A']
+            $jawabanUser = $request->jawaban; // array of ['soal_kuis_id' => x, 'jawaban' => 'A' atau 'KATA' atau ['telur', 'insang']]
             $soalList = $kuis->soalKuis->keyBy('soal_kuis_id');
 
             $totalBobot = 0;
@@ -140,8 +170,44 @@ class KuisController extends Controller
                     $s = $soalList[$soalId];
                     $totalBobot += $s->bobot_nilai;
 
-                    if ($s->kunci_jawaban === $jawaban) {
-                        $skorDidapat += $s->bobot_nilai;
+                    if ($s->tipe_soal === 'drag_drop') {
+                        // Penilaian proporsional untuk drag_drop
+                        $pilihan = is_string($s->pilihan_jawaban_json) ? json_decode($s->pilihan_jawaban_json, true) : $s->pilihan_jawaban_json;
+                        $blanks = $pilihan['blanks'] ?? [];
+                        $totalBlanks = count($blanks);
+
+                        if ($totalBlanks > 0) {
+                            $correctCount = 0;
+                            $userAnsList = [];
+                            if (is_array($jawaban)) {
+                                if (array_is_list($jawaban)) {
+                                    $userAnsList = $jawaban;
+                                } else {
+                                    ksort($jawaban);
+                                    $userAnsList = array_values($jawaban);
+                                }
+                            }
+
+                            foreach ($blanks as $idx => $b) {
+                                $kunciBlank = strtoupper(trim((string) ($b['kunci'] ?? '')));
+                                $userBlank = isset($userAnsList[$idx]) ? strtoupper(trim((string) $userAnsList[$idx])) : '';
+
+                                if ($kunciBlank !== '' && $kunciBlank === $userBlank) {
+                                    $correctCount++;
+                                }
+                            }
+
+                            // Proporsional sesuai jumlah titik kosong yang dijawab benar
+                            $skorDidapat += ($correctCount / $totalBlanks) * $s->bobot_nilai;
+                        }
+                    } else {
+                        // Pilihan Ganda & TTS: Penilaian biner
+                        $kunci = strtoupper(trim((string) $s->kunci_jawaban));
+                        $jawabanPeserta = strtoupper(trim((string) $jawaban));
+
+                        if ($kunci !== '' && $kunci === $jawabanPeserta) {
+                            $skorDidapat += $s->bobot_nilai;
+                        }
                     }
                 }
             }

@@ -16,7 +16,17 @@ class SoalKuis extends Model
     
     protected $casts = [
         'pilihan_jawaban_json' => 'array',
+        'terkunci' => 'boolean',
+        'nomor_urut' => 'integer',
+        'baris_mulai' => 'integer',
+        'kolom_mulai' => 'integer',
+        'bobot_nilai' => 'float',
     ];
+
+    public function setKunciJawabanAttribute($value)
+    {
+        $this->attributes['kunci_jawaban'] = strtoupper(trim((string) $value));
+    }
 
     public function kuis()
     {

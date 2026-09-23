@@ -14,6 +14,12 @@ class Kuis extends Model
     
     protected $guarded = [];
 
+    protected $casts = [
+        'grid_config_json' => 'array',
+        'acak_soal' => 'boolean',
+        'tampilkan_kunci_setelah' => 'boolean',
+    ];
+
     public function modul()
     {
         return $this->belongsTo(Modul::class, 'modul_id', 'modul_id');

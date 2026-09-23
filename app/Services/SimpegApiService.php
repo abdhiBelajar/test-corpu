@@ -112,6 +112,36 @@ class SimpegApiService
                 'rumpun_jabatan' => 'JF',
                 'unit_kerja' => 'Puskesmas Buleleng I',
             ],
+            '199208152019032007' => [
+                'nama_lengkap' => 'Nanta',
+                'jabatan' => 'Bidan Terampil',
+                'rumpun_jabatan' => 'Pelaksana',
+                'unit_kerja' => 'Puskesmas Buleleng I',
+            ],
+            '199208152019032006' => [
+                'nama_lengkap' => 'Leontius',
+                'jabatan' => 'Bidan Terampil',
+                'rumpun_jabatan' => 'JA',
+                'unit_kerja' => 'Puskesmas Buleleng I',
+            ],
+            '199208152019032009' => [
+                'nama_lengkap' => 'Abdhi',
+                'jabatan' => 'Bidan Terampil',
+                'rumpun_jabatan' => 'JPT',
+                'unit_kerja' => 'Puskesmas Buleleng I',
+            ],
+            '199208152019032010' => [
+                'nama_lengkap' => 'testing_peserta',
+                'jabatan' => 'testing_peserta',
+                'rumpun_jabatan' => 'JF',
+                'unit_kerja' => 'testing',
+            ],
+            '199208152019032011' => [
+                'nama_lengkap' => 'testing_admin_komunitas',
+                'jabatan' => 'testing_admin_komunitas',
+                'rumpun_jabatan' => 'JF',
+                'unit_kerja' => 'testing',
+            ],
         ];
 
         return $mockData[$nip] ?? null;
