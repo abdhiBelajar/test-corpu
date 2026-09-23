@@ -18,8 +18,9 @@ class CourseDetailController extends Controller
 
         // Ambil data pelatihan beserta relasinya
         $pembelajaran = Pembelajaran::with([
+            'kategoriKursus',
             'modul' => function ($q) {
-                $q->orderBy('urutan', 'asc')->with(['materi', 'kuis']);
+                $q->orderBy('urutan', 'asc')->with(['materi.preTest', 'kuis']);
             },
             'postTest',
             'pembelajaranJp'
@@ -52,7 +53,17 @@ class CourseDetailController extends Controller
 
             $materiList = $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran, $isModuleLocked, &$isPreviousMateriDone, &$allMateriInThisModulDone) {
                 $isRead = isset($progresMateri[$mat->materi_id]) && $progresMateri[$mat->materi_id] ? true : false;
-                $isLocked = $isModuleLocked || !$isPreviousMateriDone;
+                $isOrderLocked = $isModuleLocked || !$isPreviousMateriDone;
+
+                $preTest = $mat->preTest;
+                $isPreTestDone = false;
+                if ($preTest) {
+                    $isPreTestDone = $pendaftaran ? \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                        ->where('kuis_id', $preTest->kuis_id)
+                        ->exists() : false;
+                }
+
+                $isContentLocked = $isOrderLocked || ($preTest && !$isPreTestDone);
 
                 if (!$isRead) {
                     $isPreviousMateriDone = false;
@@ -63,10 +74,17 @@ class CourseDetailController extends Controller
                     'materi_id' => $mat->materi_id,
                     'judul' => $mat->judul_materi,
                     'tipe' => $mat->tipe_materi,
-                    'tautan' => ($pendaftaran && !$isLocked) ? $mat->tautan_atau_berkas : null,
+                    'tautan' => ($pendaftaran && !$isContentLocked) ? $mat->tautan_atau_berkas : null,
                     'durasi' => $mat->durasi_menit,
                     'is_read' => $isRead,
-                    'is_locked' => $isLocked
+                    'is_locked' => $isContentLocked,
+                    'pre_test' => $preTest ? [
+                        'kuis_id' => $preTest->kuis_id,
+                        'judul' => $preTest->judul_kuis,
+                        'durasi' => $preTest->durasi_menit,
+                        'is_completed' => $isPreTestDone,
+                        'is_locked' => $isOrderLocked
+                    ] : null
                 ];
             });
 
@@ -109,6 +127,7 @@ class CourseDetailController extends Controller
             'pembelajaran_id' => $pembelajaran->pembelajaran_id,
             'judul' => $pembelajaran->judul_pembelajaran,
             'deskripsi' => $pembelajaran->deskripsi,
+            'kategori_id' => $pembelajaran->kategori_id,
             'kategori' => $pembelajaran->kategori,
             'jpl' => $jpDet ? $jpDet->jp_final : 0,
             'is_enrolled' => $pendaftaran ? true : false,
@@ -196,6 +215,20 @@ class CourseDetailController extends Controller
             if ($prevMateriDone < $prevMateriList->count()) {
                 return response()->json([
                     'message' => 'Anda harus menyelesaikan materi sebelumnya sesuai urutan silabus.'
+                ], 422);
+            }
+        }
+
+        // 3. Validasi Pre-test jika ada pada materi ini
+        $preTest = \App\Models\Kuis::where('materi_id', $materi_id)->where('tipe_kuis', 'pre_test')->first();
+        if ($preTest) {
+            $isPreTestDone = \App\Models\RiwayatKuis::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                ->where('kuis_id', $preTest->kuis_id)
+                ->exists();
+
+            if (!$isPreTestDone) {
+                return response()->json([
+                    'message' => 'Anda harus mengerjakan Pre-test terlebih dahulu untuk mengakses materi ini.'
                 ], 422);
             }
         }

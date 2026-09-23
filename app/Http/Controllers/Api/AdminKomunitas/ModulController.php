@@ -24,7 +24,7 @@ class ModulController extends Controller
 
         $moduls = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)
                     ->orderBy('urutan', 'asc')
-                    ->with('materi', 'kuis.soalKuis')
+                    ->with('materi.preTest.soalKuis', 'kuis.soalKuis')
                     ->get();
 
         return response()->json([
@@ -55,6 +55,7 @@ class ModulController extends Controller
             ],
             'info_tatap_muka' => 'nullable|string',
             'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'jp_modul' => 'nullable|numeric|min:0|max:99.99',
         ], [
             'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
             'thumbnail.image' => 'File thumbnail harus berupa gambar.',
@@ -72,6 +73,8 @@ class ModulController extends Controller
             $thumbnailPath = $request->file('thumbnail')->store('thumbnails/modul', 'public');
         }
 
+        $jpModul = $request->filled('jp_modul') ? (float)$request->jp_modul : 0;
+
         $modul = \App\Models\Modul::create([
             'pembelajaran_id' => $pembelajaran_id,
             'judul_modul' => $request->judul_modul,
@@ -79,10 +82,21 @@ class ModulController extends Controller
             'evaluasi_deskripsi' => $request->evaluasi_deskripsi ?: 'Evaluasi pemahaman modul',
             'urutan' => $urutan,
             'durasi_total_menit' => 0,
-            'jp_modul' => 0,
+            'jp_modul' => $jpModul,
             'info_tatap_muka' => $request->info_tatap_muka,
             'thumbnail' => $thumbnailPath,
         ]);
+
+        // Rekalkulasi PembelajaranJp jika ada
+        $totalDurasi = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)->sum('durasi_total_menit');
+        $totalJp = \App\Models\Modul::where('pembelajaran_id', $pembelajaran_id)->sum('jp_modul');
+        \App\Models\PembelajaranJp::updateOrCreate(
+            ['pembelajaran_id' => $pembelajaran_id],
+            [
+                'durasi_menit' => $totalDurasi,
+                'jp_dihitung_sistem' => $totalJp,
+            ]
+        );
 
         \App\Services\CourseProgressService::syncCourseParticipants($pembelajaran_id);
 
@@ -130,6 +144,7 @@ class ModulController extends Controller
             ],
             'info_tatap_muka' => 'nullable|string',
             'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'jp_modul' => 'nullable|numeric|min:0|max:99.99',
         ], [
             'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
             'thumbnail.image' => 'File thumbnail harus berupa gambar.',
@@ -143,6 +158,10 @@ class ModulController extends Controller
             $updateData['gambaran_umum'] = $request->deskripsi;
         }
 
+        if ($request->has('jp_modul')) {
+            $updateData['jp_modul'] = (float)$request->jp_modul;
+        }
+
         if ($request->hasFile('thumbnail')) {
             if ($modul->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($modul->thumbnail)) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($modul->thumbnail);
@@ -151,6 +170,18 @@ class ModulController extends Controller
         }
 
         $modul->update($updateData);
+
+        // Rekalkulasi PembelajaranJp
+        $pembelajaranId = $modul->pembelajaran_id;
+        $totalDurasi = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('durasi_total_menit');
+        $totalJp = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('jp_modul');
+        \App\Models\PembelajaranJp::updateOrCreate(
+            ['pembelajaran_id' => $pembelajaranId],
+            [
+                'durasi_menit' => $totalDurasi,
+                'jp_dihitung_sistem' => $totalJp,
+            ]
+        );
 
         \App\Services\CourseProgressService::syncCourseParticipants($modul->pembelajaran_id);
 

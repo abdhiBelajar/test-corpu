@@ -57,7 +57,14 @@ class Modul extends Model
 
     public function kuis()
     {
-        return $this->hasOne(Kuis::class, 'modul_id', 'modul_id');
+        return $this->hasOne(Kuis::class, 'modul_id', 'modul_id')->where(function($q) {
+            $q->where('tipe_kuis', 'evaluasi_modul')->orWhereNull('tipe_kuis');
+        });
+    }
+
+    public function semuaKuis()
+    {
+        return $this->hasMany(Kuis::class, 'modul_id', 'modul_id');
     }
 
     public function progresModul()

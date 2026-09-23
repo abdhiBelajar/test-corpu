@@ -23,4 +23,9 @@ class Materi extends Model
     {
         return $this->hasMany(ProgresMateri::class, 'materi_id', 'materi_id');
     }
+
+    public function preTest()
+    {
+        return $this->hasOne(Kuis::class, 'materi_id', 'materi_id')->where('tipe_kuis', 'pre_test');
+    }
 }

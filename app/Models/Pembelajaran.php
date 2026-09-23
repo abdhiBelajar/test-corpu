@@ -50,7 +50,15 @@ class Pembelajaran extends Model
 
     public function getKategoriAttribute($value)
     {
+        if ($this->relationLoaded('kategoriKursus') && $this->kategoriKursus) {
+            return $this->kategoriKursus->nama_kategori;
+        }
         return $value ?: 'Pengembangan Kompetensi';
+    }
+
+    public function kategoriKursus()
+    {
+        return $this->belongsTo(KategoriKursus::class, 'kategori_id', 'kategori_id');
     }
 
     public function komunitas()

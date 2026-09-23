@@ -21,7 +21,10 @@ class MateriController extends Controller
         if (!$modul) return;
 
         $totalMenit = \App\Models\Materi::where('modul_id', $modul_id)->sum('durasi_menit');
-        $jp = round(min(3, $totalMenit / 135), 2);
+        // Pertahankan nilai jp_modul jika sudah diisi manual (> 0), jika 0 baru gunakan estimasi default
+        $jp = ($modul->jp_modul && (float)$modul->jp_modul > 0)
+            ? (float)$modul->jp_modul
+            : round(min(3, $totalMenit / 135), 2);
 
         $modul->update([
             'durasi_total_menit' => $totalMenit,
@@ -33,10 +36,13 @@ class MateriController extends Controller
         $totalDurasiPembelajaran = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('durasi_total_menit');
         $totalJpPembelajaran = \App\Models\Modul::where('pembelajaran_id', $pembelajaranId)->sum('jp_modul');
 
-        \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaranId)->update([
-            'durasi_menit' => $totalDurasiPembelajaran,
-            'jp_dihitung_sistem' => $totalJpPembelajaran,
-        ]);
+        \App\Models\PembelajaranJp::updateOrCreate(
+            ['pembelajaran_id' => $pembelajaranId],
+            [
+                'durasi_menit' => $totalDurasiPembelajaran,
+                'jp_dihitung_sistem' => $totalJpPembelajaran,
+            ]
+        );
     }
 
     public function index(Request $request, $modul_id)

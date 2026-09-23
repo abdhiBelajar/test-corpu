@@ -27,16 +27,16 @@ class KuisController extends Controller
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
         }
 
-        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
-        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id);
-        if ($prerequisiteError) {
-            return response()->json(['message' => $prerequisiteError], 422);
-        }
-
         $kuis = Kuis::with('soalKuis')->where('modul_id', $modul_id)->where('kuis_id', $kuis_id)->first();
 
         if (!$kuis) {
             return response()->json(['message' => 'Kuis tidak tersedia'], 404);
+        }
+
+        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
+        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id, $kuis);
+        if ($prerequisiteError) {
+            return response()->json(['message' => $prerequisiteError], 422);
         }
 
         // Cek percobaan
@@ -95,6 +95,8 @@ class KuisController extends Controller
             'message' => 'Soal Kuis berhasil diambil',
             'data' => [
                 'kuis_id' => $kuis->kuis_id,
+                'tipe_kuis' => $kuis->tipe_kuis,
+                'materi_id' => $kuis->materi_id,
                 'judul_kuis' => $kuis->judul_kuis,
                 'judul_modul' => $kuis->modul->judul_modul,
                 'nilai_kelulusan' => $kuis->nilai_kelulusan,
@@ -124,16 +126,16 @@ class KuisController extends Controller
             return response()->json(['message' => 'Anda belum terdaftar di pelatihan ini'], 400);
         }
 
-        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
-        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id);
-        if ($prerequisiteError) {
-            return response()->json(['message' => $prerequisiteError], 422);
-        }
-
         $kuis = Kuis::with('soalKuis')->where('modul_id', $modul_id)->where('kuis_id', $kuis_id)->first();
 
         if (!$kuis) {
             return response()->json(['message' => 'Kuis tidak ditemukan'], 404);
+        }
+
+        // Validasi prasyarat (materi sebelumnya & kuis sebelumnya)
+        $prerequisiteError = $this->validatePrerequisites($pendaftaran, $modul_id, $id, $kuis);
+        if ($prerequisiteError) {
+            return response()->json(['message' => $prerequisiteError], 422);
         }
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pendaftaran, $kuis, $id) {
@@ -212,9 +214,11 @@ class KuisController extends Controller
                 }
             }
 
+            $isPreTest = ($kuis->tipe_kuis === 'pre_test');
             $allBobot = $kuis->soalKuis->sum('bobot_nilai');
             $nilaiAkhir = $allBobot > 0 ? round(($skorDidapat / $allBobot) * 100, 2) : 0;
-            $apakahLulus = $nilaiAkhir >= $kuis->nilai_kelulusan;
+            // Untuk Pre-test, tidak ada syarat kelulusan nilai (selalu lulus agar materi terbuka)
+            $apakahLulus = $isPreTest ? true : ($nilaiAkhir >= $kuis->nilai_kelulusan);
 
             $percobaanKe = $percobaanCount + 1;
 
@@ -235,8 +239,9 @@ class KuisController extends Controller
             }
 
             return response()->json([
-                'message' => 'Kuis berhasil disubmit',
+                'message' => $isPreTest ? 'Pre-test berhasil diselesaikan' : 'Kuis berhasil disubmit',
                 'data' => [
+                    'tipe_kuis' => $kuis->tipe_kuis,
                     'nilai' => $nilaiAkhir,
                     'apakah_lulus' => $apakahLulus,
                     'percobaan_ke' => $percobaanKe,
@@ -283,7 +288,7 @@ class KuisController extends Controller
         $pendaftaran->save();
     }
 
-    private function validatePrerequisites($pendaftaran, $modulId, $courseId)
+    private function validatePrerequisites($pendaftaran, $modulId, $courseId, $kuis = null)
     {
         $currentModul = Modul::where('pembelajaran_id', $courseId)->find($modulId);
         if (!$currentModul) {
@@ -319,7 +324,29 @@ class KuisController extends Controller
             }
         }
 
-        // Cek semua materi di modul saat ini
+        // Jika ini adalah Pre-Test:
+        if ($kuis && $kuis->tipe_kuis === 'pre_test') {
+            $materi = Materi::find($kuis->materi_id);
+            if ($materi) {
+                $prevMateriList = Materi::where('modul_id', $modulId)
+                    ->where('urutan', '<', $materi->urutan)
+                    ->pluck('materi_id');
+
+                if ($prevMateriList->count() > 0) {
+                    $prevDone = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
+                        ->whereIn('materi_id', $prevMateriList)
+                        ->where('apakah_selesai', true)
+                        ->count();
+
+                    if ($prevDone < $prevMateriList->count()) {
+                        return 'Anda harus menyelesaikan materi sebelumnya sesuai urutan silabus.';
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Cek semua materi di modul saat ini (hanya untuk Evaluasi Modul)
         $materiIds = Materi::where('modul_id', $modulId)->pluck('materi_id');
         if ($materiIds->count() > 0) {
             $completedCount = ProgresMateri::where('pendaftaran_id', $pendaftaran->pendaftaran_id)
@@ -328,10 +355,30 @@ class KuisController extends Controller
                 ->count();
 
             if ($completedCount < $materiIds->count()) {
-                return 'Selesaikan seluruh materi pada modul ini sebelum mengerjakan kuis.';
+                return 'Selesaikan seluruh materi pada modul ini sebelum mengerjakan kuis evaluasi.';
             }
         }
 
         return null;
+    }
+
+    public function showPreTest(Request $request, $id, $materi_id)
+    {
+        $materi = Materi::findOrFail($materi_id);
+        $kuis = Kuis::where('materi_id', $materi_id)->where('tipe_kuis', 'pre_test')->first();
+        if (!$kuis) {
+            return response()->json(['message' => 'Pre-test tidak ditemukan untuk materi ini.'], 404);
+        }
+        return $this->show($request, $id, $materi->modul_id, $kuis->kuis_id);
+    }
+
+    public function submitPreTest(Request $request, $id, $materi_id)
+    {
+        $materi = Materi::findOrFail($materi_id);
+        $kuis = Kuis::where('materi_id', $materi_id)->where('tipe_kuis', 'pre_test')->first();
+        if (!$kuis) {
+            return response()->json(['message' => 'Pre-test tidak ditemukan untuk materi ini.'], 404);
+        }
+        return $this->submit($request, $id, $materi->modul_id, $kuis->kuis_id);
     }
 }

@@ -37,15 +37,29 @@ class KatalogController extends Controller
         $query = Pembelajaran::where('status', 'dipublikasikan')
             ->whereIn('komunitas_id', $joinedKomunitasIds)
             ->withCount('modul')
-            ->with(['pembelajaranJp', 'komunitas:komunitas_id,nama_komunitas,rumpun_jabatan']);
+            ->with(['pembelajaranJp', 'komunitas:komunitas_id,nama_komunitas,rumpun_jabatan', 'kategoriKursus']);
 
         // Filter komunitas spesifik (jika dipilih)
         if ($request->filled('komunitas_id') && $request->komunitas_id !== 'all') {
             $query->where('komunitas_id', $request->komunitas_id);
         }
 
-        if ($request->has('kategori') && $request->kategori !== 'Semua Kategori') {
-            $query->where('kategori', $request->kategori);
+        if ($request->has('kategori') && !in_array($request->kategori, ['Semua Kategori', 'Semua', 'all', ''])) {
+            $cat = $request->kategori;
+            $query->where(function($q) use ($cat) {
+                $q->where('kategori', $cat);
+                if (is_numeric($cat)) {
+                    $q->orWhere('kategori_id', $cat);
+                } else {
+                    $q->orWhereHas('kategoriKursus', function($kq) use ($cat) {
+                        $kq->where('nama_kategori', $cat);
+                    });
+                }
+            });
+        }
+
+        if ($request->filled('kategori_id') && $request->kategori_id !== 'all') {
+            $query->where('kategori_id', $request->kategori_id);
         }
 
         if ($request->has('search') && !empty($request->search)) {
@@ -75,7 +89,8 @@ class KatalogController extends Controller
                 'nama_komunitas' => $item->komunitas->nama_komunitas ?? '-',
                 'image' => $item->thumbnail_url,
                 'thumbnail_url' => $item->thumbnail_url,
-                'category' => $item->kategori ?? 'Lainnya',
+                'kategori_id' => $item->kategori_id,
+                'category' => $item->kategoriKursus?->nama_kategori ?? $item->kategori ?? 'Lainnya',
                 'title' => $item->judul_pembelajaran,
                 'description' => $item->deskripsi,
                 'jpl' => $jp ? ($jp->jp_final ?? $jp->jp_dihitung_sistem ?? 0) : 0,

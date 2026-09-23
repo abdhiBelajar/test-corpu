@@ -16,7 +16,7 @@ class PembelajaranController extends Controller
                             ->pluck('komunitas_id');
                             
         $pembelajaran = \App\Models\Pembelajaran::whereIn('komunitas_id', $komunitasIds)
-                            ->with(['komunitas', 'pembelajaranJp', 'modul.materi', 'validasi'])
+                            ->with(['komunitas', 'pembelajaranJp', 'modul.materi', 'validasi', 'kategoriKursus'])
                             ->get()
                             ->map(function ($c) {
                                 $totalModul = $c->modul ? $c->modul->count() : 0;
@@ -61,6 +61,7 @@ class PembelajaranController extends Controller
             'komunitas_id' => 'required|exists:komunitas,komunitas_id',
             'judul_pembelajaran' => 'required|string|max:255',
             'deskripsi' => 'nullable|string',
+            'kategori_id' => 'nullable|exists:kategori_kursus,kategori_id',
             'kategori' => 'nullable|string|max:100',
             'capaian_pembelajaran' => 'required|string',
             'nama_narasumber' => 'nullable|string|max:100',
@@ -91,12 +92,28 @@ class PembelajaranController extends Controller
             $thumbnailPath = $request->file('thumbnail')->store('thumbnails/pembelajaran', 'public');
         }
 
+        $kategoriId = $request->kategori_id;
+        $kategoriNama = $request->kategori;
+
+        if ($kategoriId) {
+            $katObj = \App\Models\KategoriKursus::find($kategoriId);
+            if ($katObj) {
+                $kategoriNama = $katObj->nama_kategori;
+            }
+        } elseif ($kategoriNama) {
+            $katObj = \App\Models\KategoriKursus::where('nama_kategori', $kategoriNama)->first();
+            if ($katObj) {
+                $kategoriId = $katObj->kategori_id;
+            }
+        }
+
         $pembelajaran = \App\Models\Pembelajaran::create([
             'komunitas_id' => $request->komunitas_id,
             'dirancang_oleh_pengguna_id' => $user->pengguna_id,
             'judul_pembelajaran' => $request->judul_pembelajaran,
             'deskripsi' => $request->deskripsi,
-            'kategori' => $request->kategori ?: 'Pengembangan Kompetensi',
+            'kategori_id' => $kategoriId,
+            'kategori' => $kategoriNama ?: 'Pengembangan Kompetensi',
             'capaian_pembelajaran' => $request->capaian_pembelajaran,
             'nama_narasumber' => $request->nama_narasumber,
             'nilai_kelulusan' => $request->nilai_kelulusan,
@@ -116,7 +133,7 @@ class PembelajaranController extends Controller
     public function show(Request $request, string $id)
     {
         $user = $request->user();
-        $pembelajaran = \App\Models\Pembelajaran::with(['komunitas', 'pembelajaranJp', 'validasi.pemvalidasi', 'modul.materi'])->findOrFail($id);
+        $pembelajaran = \App\Models\Pembelajaran::with(['komunitas', 'pembelajaranJp', 'validasi.pemvalidasi', 'modul.materi', 'kategoriKursus'])->findOrFail($id);
 
         // Verifikasi bahwa user adalah admin dari komunitas ini
         $isAdmin = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)
@@ -154,6 +171,7 @@ class PembelajaranController extends Controller
         $request->validate([
             'judul_pembelajaran' => 'sometimes|string|max:255',
             'deskripsi' => 'nullable|string',
+            'kategori_id' => 'nullable|exists:kategori_kursus,kategori_id',
             'kategori' => 'nullable|string|max:100',
             'capaian_pembelajaran' => 'sometimes|string',
             'nama_narasumber' => 'nullable|string|max:100',
@@ -169,12 +187,24 @@ class PembelajaranController extends Controller
         ]);
 
         $updateData = $request->only([
-            'judul_pembelajaran', 'deskripsi', 'kategori', 'capaian_pembelajaran',
+            'judul_pembelajaran', 'deskripsi', 'kategori_id', 'kategori', 'capaian_pembelajaran',
             'nama_narasumber', 'nilai_kelulusan', 'ringkasan_materi', 'tanggal_mulai', 'tanggal_selesai'
         ]);
 
-        if (array_key_exists('kategori', $updateData)) {
-            $updateData['kategori'] = $updateData['kategori'] ?: 'Pengembangan Kompetensi';
+        if ($request->has('kategori_id')) {
+            $updateData['kategori_id'] = $request->kategori_id;
+            if ($request->kategori_id) {
+                $katObj = \App\Models\KategoriKursus::find($request->kategori_id);
+                if ($katObj) {
+                    $updateData['kategori'] = $katObj->nama_kategori;
+                }
+            }
+        } elseif ($request->has('kategori')) {
+            $updateData['kategori'] = $request->kategori ?: 'Pengembangan Kompetensi';
+            $katObj = \App\Models\KategoriKursus::where('nama_kategori', $updateData['kategori'])->first();
+            if ($katObj) {
+                $updateData['kategori_id'] = $katObj->kategori_id;
+            }
         }
 
         // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit otomatis kembali menjadi draft

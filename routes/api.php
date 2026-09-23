@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\AdminBkpsdm\ValidasiPembelajaranController;
 use App\Http\Controllers\Api\AdminBkpsdm\VerifikasiJpController;
 use App\Http\Controllers\Api\AdminBkpsdm\LaporanController;
 use App\Http\Controllers\Api\AdminBkpsdm\PusatBantuanController;
+use App\Http\Controllers\Api\AdminBkpsdm\KategoriKursusController;
 
 Route::post('/register/request-otp', [AuthController::class, 'registerRequestOtp'])->middleware('throttle:6,1');
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
@@ -22,11 +23,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/change-password/request-otp', [AuthController::class, 'changePasswordRequestOtp'])->middleware('throttle:6,1');
     Route::post('/change-password/verify', [AuthController::class, 'changePasswordVerify'])->middleware('throttle:6,1');
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/kategori-kursus', [KategoriKursusController::class, 'index']);
 });
 
 // Admin BKPSDM Routes
 Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    
+    // Kategori Kursus
+    Route::apiResource('/kategori-kursus', KategoriKursusController::class);
     
     // Pengguna
     Route::post('/pengguna/{id}/reset-password', [PenggunaController::class, 'resetPassword']);
@@ -105,9 +110,11 @@ Route::middleware(['auth:sanctum', 'role:peserta'])->prefix('user')->group(funct
     Route::post('/courses/{id}/ulasan', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'submitUlasan']);
     Route::post('/courses/{pembelajaran_id}/materi/{materi_id}/read', [\App\Http\Controllers\Api\User\CourseDetailController::class, 'markMateriAsRead']);
 
-    // Post Test, Kuis & Sertifikat
+    // Post Test, Kuis, Pre-Test & Sertifikat
     Route::get('/courses/{pembelajaran_id}/modul/{modul_id}/kuis/{kuis_id}', [\App\Http\Controllers\Api\User\KuisController::class, 'show']);
     Route::post('/courses/{pembelajaran_id}/modul/{modul_id}/kuis/{kuis_id}/submit', [\App\Http\Controllers\Api\User\KuisController::class, 'submit']);
+    Route::get('/courses/{pembelajaran_id}/materi/{materi_id}/pre-test', [\App\Http\Controllers\Api\User\KuisController::class, 'showPreTest']);
+    Route::post('/courses/{pembelajaran_id}/materi/{materi_id}/pre-test/submit', [\App\Http\Controllers\Api\User\KuisController::class, 'submitPreTest']);
 
     Route::get('/courses/{pembelajaran_id}/post-test', [\App\Http\Controllers\Api\User\PostTestController::class, 'show']);
     Route::post('/courses/{pembelajaran_id}/post-test/submit', [\App\Http\Controllers\Api\User\PostTestController::class, 'submit']);

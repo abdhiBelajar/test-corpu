@@ -10,9 +10,17 @@ class ValidasiPembelajaranController extends Controller
     public function index()
     {
         $pembelajaran = \App\Models\Pembelajaran::where('status', 'menunggu_approval')
-            ->with(['perancang', 'komunitas', 'pembelajaranJp'])
+            ->with(['perancang', 'komunitas', 'pembelajaranJp', 'moduls'])
             ->latest('pembelajaran_id')
             ->get();
+
+        $pembelajaran->each(function ($item) {
+            $totalJpModul = (float) $item->moduls->sum('jp_modul');
+            $jpRecord = $item->pembelajaranJp->first();
+            $item->total_jp = $jpRecord && (float) $jpRecord->jp_dihitung_sistem > 0
+                ? (float) $jpRecord->jp_dihitung_sistem
+                : $totalJpModul;
+        });
 
         return response()->json([
             'message' => 'Daftar Pembelajaran Menunggu Approval',
@@ -25,7 +33,6 @@ class ValidasiPembelajaranController extends Controller
         $request->validate([
             'status_validasi' => 'required|in:disetujui,ditolak',
             'catatan' => 'nullable|string',
-            'jp_final' => 'nullable|numeric|min:0|max:100'
         ]);
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $pembelajaran_id) {
@@ -33,13 +40,14 @@ class ValidasiPembelajaranController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($pembelajaran_id);
 
-            // Validasi & Verifikasi JP jika disetujui (sesuai SOP BKPSDM)
+            // Validasi & Verifikasi JP jika disetujui (selalu mengikuti JP yang diisi Admin Komunitas)
             if ($request->status_validasi === 'disetujui') {
                 $jp = \App\Models\PembelajaranJp::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->first();
+                $totalJpModul = (float) \App\Models\Modul::where('pembelajaran_id', $pembelajaran->pembelajaran_id)->sum('jp_modul');
                 
-                $finalJp = $request->filled('jp_final') 
-                    ? (float) $request->jp_final 
-                    : ($jp ? ($jp->jp_final ?: ($jp->jp_dihitung_sistem ?: 0)) : 0);
+                $finalJp = $jp && (float) $jp->jp_dihitung_sistem > 0 
+                    ? (float) $jp->jp_dihitung_sistem 
+                    : $totalJpModul;
 
                 if ($jp) {
                     $jp->update([
@@ -99,6 +107,13 @@ class ValidasiPembelajaranController extends Controller
             'moduls.kuis',
             'postTests'
         ])->findOrFail($id);
+
+        $totalJpModul = (float) $pembelajaran->moduls->sum('jp_modul');
+        $jpRecord = $pembelajaran->pembelajaranJp->first();
+
+        $pembelajaran->total_jp = $jpRecord && (float) $jpRecord->jp_dihitung_sistem > 0
+            ? (float) $jpRecord->jp_dihitung_sistem
+            : $totalJpModul;
 
         return response()->json([
             'message' => 'Detail pembelajaran berhasil diambil',

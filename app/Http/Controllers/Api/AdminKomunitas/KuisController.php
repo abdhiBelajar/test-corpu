@@ -24,7 +24,18 @@ class KuisController extends Controller
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        $kuis = \App\Models\Kuis::where('modul_id', $modul_id)->with('soalKuis')->first();
+        $query = \App\Models\Kuis::where('modul_id', $modul_id);
+
+        if ($request->has('materi_id')) {
+            $query->where('materi_id', $request->materi_id)->where('tipe_kuis', 'pre_test');
+        } elseif ($request->has('tipe_kuis')) {
+            $query->where('tipe_kuis', $request->tipe_kuis);
+        } else {
+            // Default mengambil evaluasi_modul jika tidak ditentukan
+            $query->where('tipe_kuis', 'evaluasi_modul');
+        }
+
+        $kuis = $query->with('soalKuis')->first();
 
         return response()->json([
             'message' => 'Kuis Modul berhasil diambil',
@@ -41,17 +52,36 @@ class KuisController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
+        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
             $pembelajaran->update(['status' => 'draft']);
         }
 
-        if (\App\Models\Kuis::where('modul_id', $modul_id)->exists()) {
-            return response()->json(['message' => 'Modul ini sudah memiliki Kuis. Gunakan endpoint update.'], 400);
+        $tipeKuis = $request->input('tipe_kuis', 'evaluasi_modul');
+        $materiId = $request->input('materi_id');
+
+        if ($tipeKuis === 'pre_test') {
+            if (!$materiId) {
+                return response()->json(['message' => 'materi_id wajib disertakan untuk Pre-test.'], 422);
+            }
+            $materi = \App\Models\Materi::where('materi_id', $materiId)->where('modul_id', $modul_id)->first();
+            if (!$materi) {
+                return response()->json(['message' => 'Materi tidak ditemukan dalam modul ini.'], 404);
+            }
+            if (\App\Models\Kuis::where('materi_id', $materiId)->where('tipe_kuis', 'pre_test')->exists()) {
+                return response()->json(['message' => 'Materi ini sudah memiliki Pre-test. Gunakan endpoint update.'], 400);
+            }
+        } else {
+            if (\App\Models\Kuis::where('modul_id', $modul_id)->where('tipe_kuis', 'evaluasi_modul')->exists()) {
+                return response()->json(['message' => 'Modul ini sudah memiliki Kuis Evaluasi. Gunakan endpoint update.'], 400);
+            }
         }
 
         $request->validate([
             'judul_kuis' => 'required|string|max:200',
-            'nilai_kelulusan' => 'required|numeric|min:0|max:100',
+            'tipe_kuis' => 'nullable|in:evaluasi_modul,pre_test',
+            'materi_id' => 'nullable|exists:materi,materi_id',
+            'durasi_menit' => 'nullable|integer|min:1|max:300',
+            'nilai_kelulusan' => $tipeKuis === 'pre_test' ? 'nullable|numeric|min:0|max:100' : 'required|numeric|min:0|max:100',
             'maks_percobaan' => 'nullable|integer|min:1|max:3',
             'acak_soal' => 'nullable|boolean',
             'tampilkan_kunci_setelah' => 'nullable|boolean',
@@ -77,9 +107,12 @@ class KuisController extends Controller
 
             $kuis = \App\Models\Kuis::create([
                 'modul_id' => $modul_id,
+                'materi_id' => $tipeKuis === 'pre_test' ? $materiId : null,
+                'tipe_kuis' => $tipeKuis,
+                'durasi_menit' => $request->input('durasi_menit', 15),
                 'judul_kuis' => $request->judul_kuis,
-                'nilai_kelulusan' => $request->nilai_kelulusan,
-                'maks_percobaan' => $request->has('maks_percobaan') ? $request->maks_percobaan : 3,
+                'nilai_kelulusan' => $request->input('nilai_kelulusan', 0),
+                'maks_percobaan' => $request->has('maks_percobaan') ? $request->maks_percobaan : ($tipeKuis === 'pre_test' ? 1 : 3),
                 'acak_soal' => $request->has('acak_soal') ? $request->acak_soal : true,
                 'tampilkan_kunci_setelah' => $request->has('tampilkan_kunci_setelah') ? $request->tampilkan_kunci_setelah : true,
                 'grid_config_json' => $gridConfig,
@@ -155,6 +188,7 @@ class KuisController extends Controller
 
         $request->validate([
             'judul_kuis' => 'sometimes|string|max:200',
+            'durasi_menit' => 'nullable|integer|min:1|max:300',
             'nilai_kelulusan' => 'sometimes|numeric|min:0|max:100',
             'maks_percobaan' => 'sometimes|integer|min:1|max:3',
             'acak_soal' => 'sometimes|boolean',
@@ -175,7 +209,7 @@ class KuisController extends Controller
         \Illuminate\Support\Facades\DB::beginTransaction();
         try {
             $updateData = $request->only([
-                'judul_kuis', 'nilai_kelulusan', 'maks_percobaan', 'acak_soal', 'tampilkan_kunci_setelah'
+                'judul_kuis', 'durasi_menit', 'nilai_kelulusan', 'maks_percobaan', 'acak_soal', 'tampilkan_kunci_setelah'
             ]);
 
             if ($request->has('grid_config_json')) {

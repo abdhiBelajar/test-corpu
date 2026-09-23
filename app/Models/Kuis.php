@@ -18,11 +18,17 @@ class Kuis extends Model
         'grid_config_json' => 'array',
         'acak_soal' => 'boolean',
         'tampilkan_kunci_setelah' => 'boolean',
+        'durasi_menit' => 'integer',
     ];
 
     public function modul()
     {
         return $this->belongsTo(Modul::class, 'modul_id', 'modul_id');
+    }
+
+    public function materi()
+    {
+        return $this->belongsTo(Materi::class, 'materi_id', 'materi_id');
     }
 
     public function soalKuis()
