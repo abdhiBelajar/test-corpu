@@ -14,6 +14,7 @@ class DashboardController extends Controller
         $totalKomunitas = \App\Models\Komunitas::count();
         $komunitasAktif = \App\Models\Komunitas::where('status', 'aktif')->count();
         $totalSertifikat = \App\Models\Sertifikat::count(); // Asumsikan semua tersinkron adalah terverifikasi
+        $kursusMenungguApproval = \App\Models\Pembelajaran::where('status', 'menunggu_approval')->count();
 
         $persentaseKeaktifan = $totalKomunitas > 0 
             ? round(($komunitasAktif / $totalKomunitas) * 100, 1) 
@@ -49,6 +50,7 @@ class DashboardController extends Controller
                     'komunitas_aktif' => $komunitasAktif,
                     'sertifikat_terverifikasi' => $totalSertifikat,
                     'persentase_keaktifan_komunitas' => $persentaseKeaktifan,
+                    'kursus_menunggu_approval' => $kursusMenungguApproval,
                 ],
                 'trend_sertifikat' => $trendSertifikat,
                 'recent_courses' => $recentCourses
