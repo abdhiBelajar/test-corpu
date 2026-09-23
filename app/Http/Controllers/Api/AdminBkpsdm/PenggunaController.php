@@ -62,13 +62,15 @@ class PenggunaController extends Controller
             'email' => 'nullable|email|unique:pengguna',
             'peran' => 'required|in:admin_bkpsdm,admin_komunitas,peserta',
             'jabatan' => 'nullable|string',
-            'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
+            'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,JP,Pelaksana',
             'unit_kerja' => 'nullable|string',
             'komunitas_id' => 'required_if:peran,admin_komunitas|exists:komunitas,komunitas_id'
         ]);
 
         return \Illuminate\Support\Facades\DB::transaction(function() use ($request) {
             $passwordDefault = substr($request->nip, -8);
+            $rumpun = $request->rumpun_jabatan === 'Pelaksana' ? 'JP' : $request->rumpun_jabatan;
+
             $pengguna = \App\Models\Pengguna::create([
                 'nip' => $request->nip,
                 'nama_lengkap' => $request->nama_lengkap,
@@ -76,7 +78,7 @@ class PenggunaController extends Controller
                 'kata_sandi_hash' => \Illuminate\Support\Facades\Hash::make($passwordDefault),
                 'peran' => $request->peran,
                 'jabatan' => $request->jabatan,
-                'rumpun_jabatan' => $request->rumpun_jabatan,
+                'rumpun_jabatan' => $rumpun,
                 'unit_kerja' => $request->unit_kerja,
                 'status' => 'aktif'
             ]);

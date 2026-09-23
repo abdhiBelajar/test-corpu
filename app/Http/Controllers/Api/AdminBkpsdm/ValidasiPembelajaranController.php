@@ -102,6 +102,8 @@ class ValidasiPembelajaranController extends Controller
     public function show(string $id)
     {
         $pembelajaran = \App\Models\Pembelajaran::with([
+            'komunitas',
+            'perancang',
             'pembelajaranJp',
             'moduls.materis',
             'moduls.kuis',

@@ -60,12 +60,14 @@ class KomunitasController extends Controller
         $request->validate([
             'nama_komunitas' => 'required|string|max:255|unique:komunitas',
             'deskripsi' => 'nullable|string',
-            'rumpun_jabatan' => 'required|in:JPT,JA,JF,Pelaksana',
+            'rumpun_jabatan' => 'required|in:JPT,JA,JF,JP,Pelaksana',
             'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ], [
             'thumbnail.max' => 'Ukuran thumbnail tidak boleh lebih dari 2MB.',
             'thumbnail.image' => 'File thumbnail harus berupa gambar.',
         ]);
+
+        $rumpunJabatan = $request->rumpun_jabatan === 'Pelaksana' ? 'JP' : $request->rumpun_jabatan;
 
         $thumbnailPath = null;
         if ($request->hasFile('thumbnail')) {
@@ -75,7 +77,7 @@ class KomunitasController extends Controller
         $komunitas = \App\Models\Komunitas::create([
             'nama_komunitas' => $request->nama_komunitas,
             'deskripsi' => $request->deskripsi,
-            'rumpun_jabatan' => $request->rumpun_jabatan,
+            'rumpun_jabatan' => $rumpunJabatan,
             'thumbnail' => $thumbnailPath,
             'dibuat_oleh_pengguna_id' => $request->user()->pengguna_id,
             'status' => 'aktif'
@@ -109,7 +111,7 @@ class KomunitasController extends Controller
         $request->validate([
             'nama_komunitas' => 'nullable|string|max:255|unique:komunitas,nama_komunitas,' . $id . ',komunitas_id',
             'deskripsi' => 'nullable|string',
-            'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,Pelaksana',
+            'rumpun_jabatan' => 'nullable|in:JPT,JA,JF,JP,Pelaksana',
             'status' => 'nullable|in:aktif,nonaktif',
             'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ], [
@@ -120,6 +122,10 @@ class KomunitasController extends Controller
         $data = $request->only([
             'nama_komunitas', 'deskripsi', 'rumpun_jabatan', 'status'
         ]);
+
+        if (isset($data['rumpun_jabatan']) && $data['rumpun_jabatan'] === 'Pelaksana') {
+            $data['rumpun_jabatan'] = 'JP';
+        }
 
         if ($request->hasFile('thumbnail')) {
             if ($komunitas->thumbnail && \Illuminate\Support\Facades\Storage::disk('public')->exists($komunitas->thumbnail)) {

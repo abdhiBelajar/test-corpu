@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PegawaiSimpeg;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -57,6 +58,18 @@ class SimpegApiService
      */
     protected function getMockPegawai($nip): ?array
     {
+        // 1. Cek di tabel database pegawai_simpegs (Hasil import CSV/Excel)
+        $pegawai = PegawaiSimpeg::where('nip', $nip)->first();
+        if ($pegawai) {
+            return [
+                'nama_lengkap' => $pegawai->nama_lengkap,
+                'jabatan' => $pegawai->jabatan,
+                'rumpun_jabatan' => $pegawai->rumpun_jabatan,
+                'unit_kerja' => $pegawai->unit_kerja,
+            ];
+        }
+
+        // 2. Fallback ke mock data static bawaan
         $mockData = [
             '198001012005011001' => [
                 'nama_lengkap' => 'Budi Santoso, S.Kom',
@@ -79,7 +92,7 @@ class SimpegApiService
             '199501012020011004' => [
                 'nama_lengkap' => 'Putu Eka',
                 'jabatan' => 'Pengadministrasi Umum',
-                'rumpun_jabatan' => 'Pelaksana',
+                'rumpun_jabatan' => 'JP',
                 'unit_kerja' => 'Sekretariat Daerah',
             ],
             '199501012020011005' => [
@@ -115,7 +128,7 @@ class SimpegApiService
             '199208152019032007' => [
                 'nama_lengkap' => 'Nanta',
                 'jabatan' => 'Bidan Terampil',
-                'rumpun_jabatan' => 'Pelaksana',
+                'rumpun_jabatan' => 'JP',
                 'unit_kerja' => 'Puskesmas Buleleng I',
             ],
             '199208152019032006' => [

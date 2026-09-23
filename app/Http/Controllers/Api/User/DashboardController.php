@@ -210,7 +210,7 @@ class DashboardController extends Controller
                     'jabatan' => $user->jabatan ?: 'Pegawai ASN',
                     'unit_kerja' => $user->unit_kerja ?: 'Pemerintah Kabupaten Buleleng',
                     'email' => $user->email,
-                    'rumpun_jabatan' => $user->rumpun_jabatan ?: 'Pelaksana',
+                    'rumpun_jabatan' => $user->rumpun_jabatan ?: 'JP',
                 ],
                 'stats' => [
                     'aktif' => $aktif,
