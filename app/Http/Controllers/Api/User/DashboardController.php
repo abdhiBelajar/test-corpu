@@ -14,6 +14,23 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        if (empty($user->jabatan) || empty($user->unit_kerja)) {
+            try {
+                $simpegApi = app(\App\Services\SimpegApiService::class);
+                $pegawai = $simpegApi->getPegawaiByNip($user->nip);
+                if ($pegawai) {
+                    $user->update([
+                        'nama_lengkap' => $user->nama_lengkap ?: ($pegawai['nama_lengkap'] ?? $user->nama_lengkap),
+                        'jabatan' => $pegawai['jabatan'] ?? $user->jabatan,
+                        'rumpun_jabatan' => $pegawai['rumpun_jabatan'] ?? $user->rumpun_jabatan,
+                        'unit_kerja' => $pegawai['unit_kerja'] ?? $user->unit_kerja,
+                    ]);
+                    $user->refresh();
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Dashboard auto-sync simpeg failed: ' . $e->getMessage());
+            }
+        }
         $penggunaId = $user->pengguna_id;
 
         // Semua pendaftaran user ini
@@ -187,6 +204,14 @@ class DashboardController extends Controller
         return response()->json([
             'message' => 'Dashboard user berhasil diambil',
             'data' => [
+                'user' => [
+                    'nama_lengkap' => $user->nama_lengkap,
+                    'nip' => $user->nip,
+                    'jabatan' => $user->jabatan ?: 'Pegawai ASN',
+                    'unit_kerja' => $user->unit_kerja ?: 'Pemerintah Kabupaten Buleleng',
+                    'email' => $user->email,
+                    'rumpun_jabatan' => $user->rumpun_jabatan ?: 'Pelaksana',
+                ],
                 'stats' => [
                     'aktif' => $aktif,
                     'selesai' => $selesai,

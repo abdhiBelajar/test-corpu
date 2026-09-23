@@ -20,7 +20,7 @@ class CourseDetailController extends Controller
         $pembelajaran = Pembelajaran::with([
             'kategoriKursus',
             'modul' => function ($q) {
-                $q->orderBy('urutan', 'asc')->with(['materi.preTest', 'kuis']);
+                $q->orderBy('urutan', 'asc')->with(['materi.preTest.soalKuis', 'kuis.soalKuis']);
             },
             'postTest',
             'pembelajaranJp'
@@ -83,7 +83,8 @@ class CourseDetailController extends Controller
                         'judul' => $preTest->judul_kuis,
                         'durasi' => $preTest->durasi_menit,
                         'is_completed' => $isPreTestDone,
-                        'is_locked' => $isOrderLocked
+                        'is_locked' => $isOrderLocked,
+                        'tipe_soal_list' => $preTest->soalKuis ? $preTest->soalKuis->pluck('tipe_soal')->unique()->values()->all() : []
                     ] : null
                 ];
             });
@@ -118,7 +119,8 @@ class CourseDetailController extends Controller
                     'judul' => $m->kuis->judul_kuis,
                     'durasi' => $m->kuis->durasi_menit,
                     'is_completed' => $isKuisCompleted,
-                    'is_locked' => $isKuisLocked
+                    'is_locked' => $isKuisLocked,
+                    'tipe_soal_list' => $m->kuis->soalKuis ? $m->kuis->soalKuis->pluck('tipe_soal')->unique()->values()->all() : []
                 ] : null
             ];
         });
