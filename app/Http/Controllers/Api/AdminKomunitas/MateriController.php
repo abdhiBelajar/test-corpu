@@ -78,8 +78,8 @@ class MateriController extends Controller
 
         $request->validate([
             'judul_materi' => 'required|string|max:255',
-            'tipe_materi' => 'required|in:pdf,video_embed',
-            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed|nullable|url|max:500',
+            'tipe_materi' => 'required|in:pdf,video_embed,h5p',
+            'tautan_atau_berkas_embed' => 'required_if:tipe_materi,video_embed,h5p|nullable|string|max:1000',
             'file_pdf' => 'required_if:tipe_materi,pdf|nullable|file|mimes:pdf|max:10240',
             'durasi_menit' => 'nullable|integer|min:1',
             'apakah_wajib' => 'nullable',
@@ -97,7 +97,12 @@ class MateriController extends Controller
             $path = $request->file('file_pdf')->store('materi_pdf', 'public');
             $url = '/storage/' . $path;
         } else {
-            $url = $request->tautan_atau_berkas_embed ?: '';
+            $raw = trim($request->tautan_atau_berkas_embed ?: '');
+            // Jika user memasukkan iframe tag lengkap, ekstrak URL src-nya
+            if (preg_match('/<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']/i', $raw, $matches)) {
+                $raw = $matches[1];
+            }
+            $url = $raw;
         }
 
         $maxUrutan = \App\Models\Materi::where('modul_id', $modul_id)->max('urutan') ?? 0;
@@ -160,12 +165,22 @@ class MateriController extends Controller
                 'sometimes', 'integer', 'min:1',
                 \Illuminate\Validation\Rule::unique('materi')->where('modul_id', $modul->modul_id)->ignore($id, 'materi_id')
             ],
+            'tautan_atau_berkas_embed' => 'nullable|string|max:1000',
         ]);
 
         $updateData = $request->only(['judul_materi', 'durasi_menit', 'urutan']);
         if ($request->has('apakah_wajib')) {
             $updateData['apakah_wajib'] = filter_var($request->apakah_wajib, FILTER_VALIDATE_BOOLEAN);
         }
+
+        if ($request->has('tautan_atau_berkas_embed') && in_array($materi->tipe_materi, ['video_embed', 'h5p'])) {
+            $raw = trim($request->tautan_atau_berkas_embed ?: '');
+            if (preg_match('/<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']/i', $raw, $matches)) {
+                $raw = $matches[1];
+            }
+            $updateData['tautan_atau_berkas'] = $raw;
+        }
+
         $materi->update($updateData);
 
         $this->rekalkulasiDurasiModul($modul->modul_id);
