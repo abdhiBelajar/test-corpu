@@ -275,6 +275,31 @@ class PembelajaranController extends Controller
         ]);
     }
 
+    public function hapusSuratPernyataan(Request $request, string $id)
+    {
+        $user = $request->user();
+        $pembelajaran = \App\Models\Pembelajaran::findOrFail($id);
+
+        $isAdmin = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)
+                        ->where('komunitas_id', $pembelajaran->komunitas_id)
+                        ->exists();
+
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Akses ditolak.'], 403);
+        }
+
+        if ($pembelajaran->surat_pernyataan_url) {
+            $filePath = str_replace('/storage/', '', $pembelajaran->surat_pernyataan_url);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($filePath);
+            $pembelajaran->update(['surat_pernyataan_url' => null]);
+        }
+
+        return response()->json([
+            'message' => 'Surat pernyataan keabsahan berhasil dihapus.',
+            'data' => $pembelajaran
+        ]);
+    }
+
     public function ajukanApproval(Request $request, string $id)
     {
         $user = $request->user();

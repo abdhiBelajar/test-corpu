@@ -69,6 +69,7 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     Route::get('/dashboard', [\App\Http\Controllers\Api\AdminKomunitas\DashboardController::class, 'index']);
 
     // Pembelajaran
+    Route::delete('/pembelajaran/{id}/surat-pernyataan', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'hapusSuratPernyataan']);
     Route::post('/pembelajaran/{id}', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'update']);
     Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);
     Route::post('/pembelajaran/{id}/ajukan-approval', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'ajukanApproval']);
@@ -76,6 +77,7 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
 
     // Modul & Materi
     Route::post('/modul/{id}', [\App\Http\Controllers\Api\AdminKomunitas\ModulController::class, 'update']);
+    Route::post('/materi/{id}', [\App\Http\Controllers\Api\AdminKomunitas\MateriController::class, 'update']);
     Route::apiResource('/pembelajaran.modul', \App\Http\Controllers\Api\AdminKomunitas\ModulController::class)->shallow();
     Route::apiResource('/modul.materi', \App\Http\Controllers\Api\AdminKomunitas\MateriController::class)->shallow();
 

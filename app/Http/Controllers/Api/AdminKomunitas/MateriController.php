@@ -72,8 +72,16 @@ class MateriController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            $pembelajaran->update(['status' => 'draft']);
+        if ($pembelajaran && ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->dipublikasikan_pada !== null)) {
+            $pembelajaran->update(['status' => 'menunggu_approval']);
+            \App\Models\ValidasiPembelajaran::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'divalidasi_oleh_pengguna_id' => $request->user()->pengguna_id,
+                    'status_validasi' => 'diajukan',
+                    'catatan' => 'Materi baru ditambahkan oleh Admin Komunitas. Menunggu validasi ulang Admin BKPSDM.'
+                ]
+            );
         }
 
         $request->validate([
@@ -124,7 +132,8 @@ class MateriController extends Controller
 
         return response()->json([
             'message' => 'Materi berhasil ditambahkan',
-            'data' => $materi
+            'data' => $materi,
+            'status_pembelajaran' => $pembelajaran ? $pembelajaran->status : null
         ], 201);
     }
 
@@ -153,12 +162,21 @@ class MateriController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran->status === 'dipublikasikan') {
-            $pembelajaran->update(['status' => 'draft']);
+        if ($pembelajaran && ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->dipublikasikan_pada !== null)) {
+            $pembelajaran->update(['status' => 'menunggu_approval']);
+            \App\Models\ValidasiPembelajaran::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'divalidasi_oleh_pengguna_id' => $request->user()->pengguna_id,
+                    'status_validasi' => 'diajukan',
+                    'catatan' => 'Materi pada kursus diperbarui oleh Admin Komunitas. Menunggu validasi ulang Admin BKPSDM.'
+                ]
+            );
         }
 
         $request->validate([
             'judul_materi' => 'sometimes|string|max:255',
+            'tipe_materi' => 'sometimes|in:pdf,video_embed,h5p',
             'durasi_menit' => 'sometimes|integer|min:1',
             'apakah_wajib' => 'nullable|in:0,1,true,false',
             'urutan' => [
@@ -166,14 +184,24 @@ class MateriController extends Controller
                 \Illuminate\Validation\Rule::unique('materi')->where('modul_id', $modul->modul_id)->ignore($id, 'materi_id')
             ],
             'tautan_atau_berkas_embed' => 'nullable|string|max:1000',
+            'file_pdf' => 'nullable|file|mimes:pdf|max:10240',
         ]);
 
-        $updateData = $request->only(['judul_materi', 'durasi_menit', 'urutan']);
+        $newTipe = $request->input('tipe_materi', $materi->tipe_materi);
+        $updateData = $request->only(['judul_materi', 'durasi_menit', 'urutan', 'tipe_materi']);
         if ($request->has('apakah_wajib')) {
             $updateData['apakah_wajib'] = filter_var($request->apakah_wajib, FILTER_VALIDATE_BOOLEAN);
         }
 
-        if ($request->has('tautan_atau_berkas_embed') && in_array($materi->tipe_materi, ['video_embed', 'h5p'])) {
+        if ($request->hasFile('file_pdf')) {
+            if ($materi->tipe_materi === 'pdf' && $materi->tautan_atau_berkas) {
+                $oldPath = str_replace('/storage/', '', $materi->tautan_atau_berkas);
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldPath);
+            }
+            $path = $request->file('file_pdf')->store('materi_pdf', 'public');
+            $updateData['tautan_atau_berkas'] = '/storage/' . $path;
+            $updateData['tipe_materi'] = 'pdf';
+        } elseif ($request->has('tautan_atau_berkas_embed') && in_array($newTipe, ['video_embed', 'h5p'])) {
             $raw = trim($request->tautan_atau_berkas_embed ?: '');
             if (preg_match('/<iframe\b[^>]*\bsrc=["\']([^"\']+)["\']/i', $raw, $matches)) {
                 $raw = $matches[1];
@@ -188,7 +216,8 @@ class MateriController extends Controller
 
         return response()->json([
             'message' => 'Materi berhasil diperbarui',
-            'data' => $materi
+            'data' => $materi,
+            'status_pembelajaran' => $pembelajaran ? $pembelajaran->status : null
         ]);
     }
 
@@ -202,8 +231,16 @@ class MateriController extends Controller
         }
 
         $pembelajaran = \App\Models\Pembelajaran::find($modul->pembelajaran_id);
-        if ($pembelajaran && $pembelajaran->status === 'dipublikasikan') {
-            $pembelajaran->update(['status' => 'draft']);
+        if ($pembelajaran && ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->dipublikasikan_pada !== null)) {
+            $pembelajaran->update(['status' => 'menunggu_approval']);
+            \App\Models\ValidasiPembelajaran::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'divalidasi_oleh_pengguna_id' => $request->user()->pengguna_id,
+                    'status_validasi' => 'diajukan',
+                    'catatan' => 'Materi pada kursus dihapus oleh Admin Komunitas. Menunggu validasi ulang Admin BKPSDM.'
+                ]
+            );
         }
 
         // Hapus berkas fisik jika bertipe PDF
@@ -219,7 +256,8 @@ class MateriController extends Controller
         \App\Services\CourseProgressService::syncCourseParticipants($pembelajaranId);
 
         return response()->json([
-            'message' => 'Materi berhasil dihapus'
+            'message' => 'Materi berhasil dihapus',
+            'status_pembelajaran' => $pembelajaran ? $pembelajaran->status : null
         ]);
     }
 

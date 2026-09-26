@@ -34,7 +34,10 @@ class KatalogController extends Controller
             ]);
         }
 
-        $query = Pembelajaran::where('status', 'dipublikasikan')
+        $query = Pembelajaran::where(function($q) {
+                $q->where('status', 'dipublikasikan')
+                  ->orWhere('status', 'menunggu_approval');
+            })
             ->whereIn('komunitas_id', $joinedKomunitasIds)
             ->withCount('modul')
             ->with(['pembelajaranJp', 'komunitas:komunitas_id,nama_komunitas,rumpun_jabatan', 'kategoriKursus']);
@@ -83,6 +86,7 @@ class KatalogController extends Controller
 
         $items = $pembelajaran->getCollection()->map(function ($item) use ($enrolledIds) {
             $jp = $item->pembelajaranJp->first();
+            $isLockedReview = $item->status !== 'dipublikasikan';
             return [
                 'id' => $item->pembelajaran_id,
                 'komunitas_id' => $item->komunitas_id,
@@ -95,7 +99,10 @@ class KatalogController extends Controller
                 'description' => $item->deskripsi,
                 'jpl' => $jp ? ($jp->jp_final ?? $jp->jp_dihitung_sistem ?? 0) : 0,
                 'modules' => $item->modul_count,
-                'isEnrolled' => in_array($item->pembelajaran_id, $enrolledIds)
+                'isEnrolled' => in_array($item->pembelajaran_id, $enrolledIds),
+                'status' => $item->status,
+                'is_locked_review' => $isLockedReview,
+                'lock_reason' => $isLockedReview ? 'Materi pembelajaran sedang dalam pembaruan dan menunggu approval Admin BKPSDM' : null,
             ];
         });
 
@@ -113,7 +120,16 @@ class KatalogController extends Controller
     {
         $user = $request->user();
         
-        $pembelajaran = Pembelajaran::with('komunitas')->where('status', 'dipublikasikan')->findOrFail($id);
+        $pembelajaran = Pembelajaran::with('komunitas')->find($id);
+        if (!$pembelajaran) {
+            return response()->json(['message' => 'Pembelajaran tidak ditemukan'], 404);
+        }
+
+        if ($pembelajaran->status !== 'dipublikasikan') {
+            return response()->json([
+                'message' => 'Pembelajaran ini sedang dalam peninjauan materi oleh Admin BKPSDM. Pendaftaran sementara terkunci.'
+            ], 400);
+        }
 
         // Validasi: Peserta HARUS sudah bergabung ke komunitas penyelenggara
         $isMember = $user->komunitas()->where('komunitas_pengguna.komunitas_id', $pembelajaran->komunitas_id)->exists();

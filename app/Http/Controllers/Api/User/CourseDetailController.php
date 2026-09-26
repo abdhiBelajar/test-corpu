@@ -43,17 +43,19 @@ class CourseDetailController extends Controller
         // Map data agar mudah dikonsumsi frontend
         $jpDet = $pembelajaran->pembelajaranJp->first();
 
+        $isCourseLockedReview = $pembelajaran->status !== 'dipublikasikan';
+
         // Evaluasi locking silabus
         $isPreviousModulePassed = true;
-        $mappedModul = $pembelajaran->modul->map(function ($m) use ($progresMateri, $pendaftaran, &$isPreviousModulePassed) {
-            $isModuleLocked = !$isPreviousModulePassed;
+        $mappedModul = $pembelajaran->modul->map(function ($m) use ($progresMateri, $pendaftaran, &$isPreviousModulePassed, $isCourseLockedReview) {
+            $isModuleLocked = $isCourseLockedReview || !$isPreviousModulePassed;
 
             $isPreviousMateriDone = true;
             $allMateriInThisModulDone = true;
 
-            $materiList = $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran, $isModuleLocked, &$isPreviousMateriDone, &$allMateriInThisModulDone) {
+            $materiList = $m->materi->map(function ($mat) use ($progresMateri, $pendaftaran, $isModuleLocked, &$isPreviousMateriDone, &$allMateriInThisModulDone, $isCourseLockedReview) {
                 $isRead = isset($progresMateri[$mat->materi_id]) && $progresMateri[$mat->materi_id] ? true : false;
-                $isOrderLocked = $isModuleLocked || !$isPreviousMateriDone;
+                $isOrderLocked = $isModuleLocked || !$isPreviousMateriDone || $isCourseLockedReview;
 
                 $preTest = $mat->preTest;
                 $isPreTestDone = false;
@@ -63,7 +65,7 @@ class CourseDetailController extends Controller
                         ->exists() : false;
                 }
 
-                $isContentLocked = $isOrderLocked || ($preTest && !$isPreTestDone);
+                $isContentLocked = $isCourseLockedReview || $isOrderLocked || ($preTest && !$isPreTestDone);
 
                 if (!$isRead) {
                     $isPreviousMateriDone = false;
@@ -83,7 +85,7 @@ class CourseDetailController extends Controller
                         'judul' => $preTest->judul_kuis,
                         'durasi' => $preTest->durasi_menit,
                         'is_completed' => $isPreTestDone,
-                        'is_locked' => $isOrderLocked,
+                        'is_locked' => $isCourseLockedReview || $isOrderLocked,
                         'tipe_soal_list' => $preTest->soalKuis ? $preTest->soalKuis->pluck('tipe_soal')->unique()->values()->all() : []
                     ] : null
                 ];
@@ -98,7 +100,7 @@ class CourseDetailController extends Controller
                     ->exists() : false;
                 
                 // Kuis terbuka hanya jika seluruh materi pada modul ini sudah dibaca
-                $isKuisLocked = $isModuleLocked || !$allMateriInThisModulDone;
+                $isKuisLocked = $isCourseLockedReview || $isModuleLocked || !$allMateriInThisModulDone;
             }
 
             // Status kelulusan modul untuk menentukan apakah modul berikutnya terbuka
@@ -131,6 +133,9 @@ class CourseDetailController extends Controller
             'deskripsi' => $pembelajaran->deskripsi,
             'kategori_id' => $pembelajaran->kategori_id,
             'kategori' => $pembelajaran->kategori,
+            'status' => $pembelajaran->status,
+            'is_locked_review' => $isCourseLockedReview,
+            'lock_reason' => $isCourseLockedReview ? 'Materi pembelajaran ini sedang dalam pembaruan dan menunggu persetujuan Admin BKPSDM. Seluruh akses materi sementara terkunci.' : null,
             'jpl' => $jpDet ? $jpDet->jp_final : 0,
             'is_enrolled' => $pendaftaran ? true : false,
             'status_pendaftaran' => $pendaftaran->status_pendaftaran ?? null,
@@ -140,7 +145,7 @@ class CourseDetailController extends Controller
                 'post_test_id' => $pembelajaran->postTest->post_test_id,
                 'judul' => 'Post Test Akhir Pelatihan',
                 'durasi' => $pembelajaran->postTest->durasi_menit,
-                'is_locked' => ($pendaftaran->persentase_progres ?? 0) < 100
+                'is_locked' => $isCourseLockedReview || (($pendaftaran->persentase_progres ?? 0) < 100)
             ] : null
         ];
 
@@ -153,6 +158,13 @@ class CourseDetailController extends Controller
     public function markMateriAsRead(Request $request, $id, $materi_id)
     {
         $user = $request->user();
+
+        $pembelajaran = Pembelajaran::find($id);
+        if ($pembelajaran && $pembelajaran->status !== 'dipublikasikan') {
+            return response()->json([
+                'message' => 'Materi tidak dapat diselesaikan karena kursus sedang dalam proses peninjauan pembaruan oleh Admin BKPSDM.'
+            ], 400);
+        }
 
         $pendaftaran = PendaftaranPembelajaran::where('pengguna_id', $user->pengguna_id)
             ->where('pembelajaran_id', $id)
