@@ -18,22 +18,28 @@ class SertifikatController extends Controller
             $q->where('pengguna_id', $user->pengguna_id);
         })
         ->with(['pendaftaran.pembelajaran' => function($q) {
-            $q->with('pembelajaranJp');
+            $q->with(['pembelajaranJp', 'moduls']);
         }])
         ->orderBy('tanggal_terbit', 'desc')
         ->get()
         ->map(function($s) {
-            $jpSer = $s->pendaftaran->pembelajaran->pembelajaranJp->first();
+            $pemb = $s->pendaftaran ? $s->pendaftaran->pembelajaran : null;
+            $jpSer = $pemb && $pemb->pembelajaranJp ? $pemb->pembelajaranJp->first() : null;
+            $thumb = $pemb ? $pemb->thumbnail_url : null;
+            if (!$thumb) {
+                $thumb = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=2070&auto=format&fit=crop';
+            }
             return [
                 'sertifikat_id' => $s->sertifikat_id,
                 'pembelajaran_id' => $s->pendaftaran->pembelajaran_id ?? null,
                 'nomor_sertifikat' => $s->nomor_sertifikat,
                 'tanggal_terbit' => $s->tanggal_terbit,
-                'judul_pelatihan' => $s->pendaftaran->pembelajaran->judul_pembelajaran ?? '-',
+                'judul_pelatihan' => $pemb->judul_pembelajaran ?? '-',
                 'jpl' => $jpSer ? $jpSer->jp_final : 0,
-                'kategori' => $s->pendaftaran->pembelajaran->kategori ?? 'Lainnya',
+                'kategori' => $pemb->kategori ?? 'Lainnya',
                 'tautan_berkas' => $s->tautan_berkas,
-                'image' => 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?q=80&w=2070&auto=format&fit=crop'
+                'image' => $thumb,
+                'thumbnail_url' => $thumb,
             ];
         });
 
