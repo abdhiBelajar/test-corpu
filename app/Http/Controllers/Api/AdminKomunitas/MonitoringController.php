@@ -56,7 +56,8 @@ class MonitoringController extends Controller
         $query = \App\Models\PendaftaranPembelajaran::whereIn('pembelajaran_id', $pembelajaranIds)
             ->with([
                 'pengguna:pengguna_id,nama_lengkap,nip,rumpun_jabatan,unit_kerja,jabatan',
-                'pembelajaran:pembelajaran_id,judul_pembelajaran,kategori'
+                'pembelajaran:pembelajaran_id,judul_pembelajaran,kategori',
+                'ulasan'
             ]);
 
         if ($request->filled('pembelajaran_id') && $request->pembelajaran_id !== 'all') {
@@ -94,6 +95,12 @@ class MonitoringController extends Controller
                 'nilai_post_test' => $latestPostTest ? $latestPostTest->nilai : null,
                 'status' => $p->status_pendaftaran,
                 'terdaftar_pada' => $p->terdaftar_pada,
+                'ulasan' => $p->ulasan ? [
+                    'ulasan_id' => $p->ulasan->ulasan_id,
+                    'skor_rating' => (int) $p->ulasan->skor_rating,
+                    'teks_ulasan' => $p->ulasan->teks_ulasan,
+                    'dikirim_pada' => $p->ulasan->dikirim_pada,
+                ] : null,
             ];
         });
 

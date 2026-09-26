@@ -59,6 +59,7 @@ class KuisController extends Controller
         $tipeKuis = $request->input('tipe_kuis', 'evaluasi_modul');
         $materiId = $request->input('materi_id');
 
+        $existingKuis = null;
         if ($tipeKuis === 'pre_test') {
             if (!$materiId) {
                 return response()->json(['message' => 'materi_id wajib disertakan untuk Pre-test.'], 422);
@@ -67,13 +68,17 @@ class KuisController extends Controller
             if (!$materi) {
                 return response()->json(['message' => 'Materi tidak ditemukan dalam modul ini.'], 404);
             }
-            if (\App\Models\Kuis::where('materi_id', $materiId)->where('tipe_kuis', 'pre_test')->exists()) {
-                return response()->json(['message' => 'Materi ini sudah memiliki Pre-test. Gunakan endpoint update.'], 400);
-            }
+            $existingKuis = \App\Models\Kuis::where('materi_id', $materiId)->where('tipe_kuis', 'pre_test')->first();
         } else {
-            if (\App\Models\Kuis::where('modul_id', $modul_id)->where('tipe_kuis', 'evaluasi_modul')->exists()) {
-                return response()->json(['message' => 'Modul ini sudah memiliki Kuis Evaluasi. Gunakan endpoint update.'], 400);
-            }
+            $existingKuis = \App\Models\Kuis::where('modul_id', $modul_id)
+                ->where(function ($q) {
+                    $q->where('tipe_kuis', 'evaluasi_modul')->orWhereNull('tipe_kuis');
+                })->first();
+        }
+
+        // Jika kuis evaluasi atau pre-test sudah ada, otomatis perbarui (update) kuis yang sudah ada
+        if ($existingKuis) {
+            return $this->update($request, $existingKuis->kuis_id);
         }
 
         $request->validate([

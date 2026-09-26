@@ -53,6 +53,7 @@ Route::middleware(['auth:sanctum', 'role:admin_bkpsdm'])->prefix('admin-bkpsdm')
     // Laporan
     Route::get('/laporan/peserta', [LaporanController::class, 'peserta']);
     Route::get('/laporan/peserta/export', [LaporanController::class, 'exportPeserta']);
+    Route::get('/laporan/ulasan', [LaporanController::class, 'ulasan']);
 
     // Pusat Bantuan
     Route::get('/tiket', [PusatBantuanController::class, 'tiket']);
@@ -69,6 +70,7 @@ Route::middleware(['auth:sanctum', 'role:admin_komunitas'])->prefix('admin-komun
     Route::get('/dashboard', [\App\Http\Controllers\Api\AdminKomunitas\DashboardController::class, 'index']);
 
     // Pembelajaran
+    Route::get('/pembelajaran/{id}/ulasan', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'getUlasan']);
     Route::delete('/pembelajaran/{id}/surat-pernyataan', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'hapusSuratPernyataan']);
     Route::post('/pembelajaran/{id}', [\App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class, 'update']);
     Route::apiResource('/pembelajaran', \App\Http\Controllers\Api\AdminKomunitas\PembelajaranController::class);

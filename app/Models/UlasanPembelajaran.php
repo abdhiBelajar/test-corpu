@@ -13,4 +13,9 @@ class UlasanPembelajaran extends Model
     const UPDATED_AT = null;
     
     protected $guarded = [];
+
+    public function pendaftaran()
+    {
+        return $this->belongsTo(PendaftaranPembelajaran::class, 'pendaftaran_id', 'pendaftaran_id');
+    }
 }

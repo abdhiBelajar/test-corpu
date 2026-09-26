@@ -117,6 +117,31 @@ class ValidasiPembelajaranController extends Controller
             ? (float) $jpRecord->jp_dihitung_sistem
             : $totalJpModul;
 
+        $pendaftaranIds = \App\Models\PendaftaranPembelajaran::where('pembelajaran_id', $id)->pluck('pendaftaran_id');
+        $ulasanList = \App\Models\UlasanPembelajaran::whereIn('pendaftaran_id', $pendaftaranIds)
+            ->with(['pendaftaran.pengguna:pengguna_id,nama_lengkap,nip,unit_kerja'])
+            ->latest('dikirim_pada')
+            ->get();
+
+        $totalUlasan = $ulasanList->count();
+        $avgRating = $totalUlasan > 0 ? round($ulasanList->avg('skor_rating'), 1) : 0;
+
+        $pembelajaran->statistik_ulasan = [
+            'total' => $totalUlasan,
+            'rata_rata' => $avgRating,
+            'daftar' => $ulasanList->map(function ($u) {
+                return [
+                    'ulasan_id' => $u->ulasan_id,
+                    'skor_rating' => (int) $u->skor_rating,
+                    'teks_ulasan' => $u->teks_ulasan,
+                    'dikirim_pada' => $u->dikirim_pada,
+                    'nama_peserta' => $u->pendaftaran?->pengguna?->nama_lengkap ?? 'Peserta',
+                    'nip' => $u->pendaftaran?->pengguna?->nip ?? '-',
+                    'unit_kerja' => $u->pendaftaran?->pengguna?->unit_kerja ?? '-',
+                ];
+            })
+        ];
+
         return response()->json([
             'message' => 'Detail pembelajaran berhasil diambil',
             'data' => $pembelajaran

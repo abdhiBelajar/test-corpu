@@ -38,4 +38,9 @@ class PendaftaranPembelajaran extends Model
     {
         return $this->hasOne(Sertifikat::class, 'pendaftaran_id', 'pendaftaran_id');
     }
+
+    public function ulasan()
+    {
+        return $this->hasOne(UlasanPembelajaran::class, 'pendaftaran_id', 'pendaftaran_id');
+    }
 }

@@ -421,4 +421,64 @@ class PembelajaranController extends Controller
         });
     }
 
+    public function getUlasan(Request $request, string $id)
+    {
+        $user = $request->user();
+        $pembelajaran = \App\Models\Pembelajaran::findOrFail($id);
+
+        $isAdmin = \App\Models\AdminKomunitas::where('pengguna_id', $user->pengguna_id)
+                        ->where('komunitas_id', $pembelajaran->komunitas_id)
+                        ->exists();
+
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Akses ditolak.'], 403);
+        }
+
+        $pendaftaranIds = \App\Models\PendaftaranPembelajaran::where('pembelajaran_id', $id)
+            ->pluck('pendaftaran_id');
+
+        $ulasanList = \App\Models\UlasanPembelajaran::whereIn('pendaftaran_id', $pendaftaranIds)
+            ->with(['pendaftaran.pengguna:pengguna_id,nama_lengkap,nip,unit_kerja,rumpun_jabatan'])
+            ->latest('dikirim_pada')
+            ->get();
+
+        $total = $ulasanList->count();
+        $avg = $total > 0 ? round($ulasanList->avg('skor_rating'), 1) : 0;
+
+        $distribusi = [
+            5 => $ulasanList->where('skor_rating', 5)->count(),
+            4 => $ulasanList->where('skor_rating', 4)->count(),
+            3 => $ulasanList->where('skor_rating', 3)->count(),
+            2 => $ulasanList->where('skor_rating', 2)->count(),
+            1 => $ulasanList->where('skor_rating', 1)->count(),
+        ];
+
+        $formatted = $ulasanList->map(function ($u) {
+            return [
+                'ulasan_id' => $u->ulasan_id,
+                'skor_rating' => (int) $u->skor_rating,
+                'teks_ulasan' => $u->teks_ulasan,
+                'dikirim_pada' => $u->dikirim_pada,
+                'peserta' => [
+                    'pengguna_id' => $u->pendaftaran?->pengguna?->pengguna_id,
+                    'nama_lengkap' => $u->pendaftaran?->pengguna?->nama_lengkap ?? 'Peserta',
+                    'nip' => $u->pendaftaran?->pengguna?->nip ?? '-',
+                    'unit_kerja' => $u->pendaftaran?->pengguna?->unit_kerja ?? '-',
+                    'rumpun_jabatan' => $u->pendaftaran?->pengguna?->rumpun_jabatan ?? '-',
+                ]
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Ulasan pembelajaran berhasil diambil',
+            'data' => [
+                'statistik' => [
+                    'total_ulasan' => $total,
+                    'rata_rata' => $avg,
+                    'distribusi' => $distribusi,
+                ],
+                'ulasan' => $formatted
+            ]
+        ]);
+    }
 }

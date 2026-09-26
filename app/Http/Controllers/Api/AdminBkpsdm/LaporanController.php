@@ -17,7 +17,8 @@ class LaporanController extends Controller
         $pendaftaranQuery = \App\Models\PendaftaranPembelajaran::with([
             'pengguna',
             'pembelajaran.komunitas',
-            'sertifikat'
+            'sertifikat',
+            'ulasan'
         ]);
 
         if ($request->filled('search')) {
@@ -81,6 +82,12 @@ class LaporanController extends Controller
                     'file_sertifikat_path' => $p->sertifikat->file_sertifikat_path,
                     'diterbitkan_pada' => $p->sertifikat->diterbitkan_pada,
                     'download_url' => url('/api/user/certificates/' . $p->sertifikat->sertifikat_id . '/download'),
+                ] : null,
+                'ulasan' => $p->ulasan ? [
+                    'ulasan_id' => $p->ulasan->ulasan_id,
+                    'skor_rating' => (int) $p->ulasan->skor_rating,
+                    'teks_ulasan' => $p->ulasan->teks_ulasan,
+                    'dikirim_pada' => $p->ulasan->dikirim_pada,
                 ] : null,
                 'pengguna' => $p->pengguna,
                 'pembelajaran' => $p->pembelajaran,
@@ -216,5 +223,91 @@ class LaporanController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    public function ulasan(Request $request)
+    {
+        $query = \App\Models\UlasanPembelajaran::with([
+            'pendaftaran.pengguna',
+            'pendaftaran.pembelajaran.komunitas'
+        ]);
+
+        if ($request->filled('komunitas_id')) {
+            $query->whereHas('pendaftaran.pembelajaran', function ($q) use ($request) {
+                $q->where('komunitas_id', $request->komunitas_id);
+            });
+        }
+
+        if ($request->filled('pembelajaran_id')) {
+            $query->whereHas('pendaftaran', function ($q) use ($request) {
+                $q->where('pembelajaran_id', $request->pembelajaran_id);
+            });
+        }
+
+        if ($request->filled('skor_rating')) {
+            $query->where('skor_rating', $request->skor_rating);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('teks_ulasan', 'like', "%{$search}%")
+                  ->orWhereHas('pendaftaran.pengguna', function ($qu) use ($search) {
+                      $qu->where('nama_lengkap', 'like', "%{$search}%")
+                         ->orWhere('nip', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('pendaftaran.pembelajaran', function ($qp) use ($search) {
+                      $qp->where('judul_pembelajaran', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $allUlasan = $query->latest('dikirim_pada')->get();
+
+        $totalUlasan = $allUlasan->count();
+        $avgRating = $totalUlasan > 0 ? round($allUlasan->avg('skor_rating'), 1) : 0;
+        $puasCount = $allUlasan->where('skor_rating', '>=', 4)->count();
+        $persenPuas = $totalUlasan > 0 ? round(($puasCount / $totalUlasan) * 100) : 0;
+
+        $items = $allUlasan->map(function ($u) {
+            return [
+                'ulasan_id' => $u->ulasan_id,
+                'skor_rating' => (int) $u->skor_rating,
+                'teks_ulasan' => $u->teks_ulasan,
+                'dikirim_pada' => $u->dikirim_pada,
+                'peserta' => [
+                    'pengguna_id' => $u->pendaftaran?->pengguna?->pengguna_id,
+                    'nama_lengkap' => $u->pendaftaran?->pengguna?->nama_lengkap ?? '-',
+                    'nip' => $u->pendaftaran?->pengguna?->nip ?? '-',
+                    'unit_kerja' => $u->pendaftaran?->pengguna?->unit_kerja ?? '-',
+                    'instansi' => $u->pendaftaran?->pengguna?->instansi ?? '-',
+                ],
+                'pembelajaran' => [
+                    'pembelajaran_id' => $u->pendaftaran?->pembelajaran?->pembelajaran_id,
+                    'judul_pembelajaran' => $u->pendaftaran?->pembelajaran?->judul_pembelajaran ?? '-',
+                    'kategori' => $u->pendaftaran?->pembelajaran?->kategori ?? '-',
+                    'nama_komunitas' => $u->pendaftaran?->pembelajaran?->komunitas?->nama_komunitas ?? 'BKPSDM',
+                ]
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Data ulasan berhasil diambil',
+            'data' => [
+                'stats' => [
+                    'total_ulasan' => $totalUlasan,
+                    'rata_rata_rating' => $avgRating,
+                    'persen_puas' => $persenPuas,
+                    'distribusi' => [
+                        5 => $allUlasan->where('skor_rating', 5)->count(),
+                        4 => $allUlasan->where('skor_rating', 4)->count(),
+                        3 => $allUlasan->where('skor_rating', 3)->count(),
+                        2 => $allUlasan->where('skor_rating', 2)->count(),
+                        1 => $allUlasan->where('skor_rating', 1)->count(),
+                    ]
+                ],
+                'ulasan' => $items
+            ]
+        ]);
     }
 }

@@ -103,4 +103,16 @@ class Pembelajaran extends Model
     {
         return $this->hasMany(PendaftaranPembelajaran::class, 'pembelajaran_id', 'pembelajaran_id');
     }
+
+    public function ulasans()
+    {
+        return $this->hasManyThrough(
+            UlasanPembelajaran::class,
+            PendaftaranPembelajaran::class,
+            'pembelajaran_id',
+            'pendaftaran_id',
+            'pembelajaran_id',
+            'pendaftaran_id'
+        );
+    }
 }
