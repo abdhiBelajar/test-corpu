@@ -36,7 +36,9 @@ class KatalogController extends Controller
 
         $query = Pembelajaran::where(function($q) {
                 $q->where('status', 'dipublikasikan')
-                  ->orWhere('status', 'menunggu_approval');
+                  ->orWhere('status', 'menunggu_approval')
+                  ->orWhere('status', 'ditolak')
+                  ->orWhereNotNull('dipublikasikan_pada');
             })
             ->whereIn('komunitas_id', $joinedKomunitasIds)
             ->withCount('modul')
@@ -87,6 +89,16 @@ class KatalogController extends Controller
         $items = $pembelajaran->getCollection()->map(function ($item) use ($enrolledIds) {
             $jp = $item->pembelajaranJp->first();
             $isLockedReview = $item->status !== 'dipublikasikan';
+            $lockReason = null;
+            if ($isLockedReview) {
+                if ($item->status === 'ditolak') {
+                    $lockReason = 'Kursus ini sedang dalam revisi konten dan menunggu peninjauan ulang oleh Admin BKPSDM';
+                } elseif ($item->status === 'menunggu_approval') {
+                    $lockReason = 'Materi pembelajaran sedang dalam pembaruan dan menunggu approval Admin BKPSDM';
+                } else {
+                    $lockReason = 'Kursus ini sedang dalam pembaruan konten dan menunggu approval Admin BKPSDM';
+                }
+            }
             return [
                 'id' => $item->pembelajaran_id,
                 'komunitas_id' => $item->komunitas_id,
@@ -102,7 +114,7 @@ class KatalogController extends Controller
                 'isEnrolled' => in_array($item->pembelajaran_id, $enrolledIds),
                 'status' => $item->status,
                 'is_locked_review' => $isLockedReview,
-                'lock_reason' => $isLockedReview ? 'Materi pembelajaran sedang dalam pembaruan dan menunggu approval Admin BKPSDM' : null,
+                'lock_reason' => $lockReason,
             ];
         });
 

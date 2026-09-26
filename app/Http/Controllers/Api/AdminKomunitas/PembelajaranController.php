@@ -207,9 +207,18 @@ class PembelajaranController extends Controller
             }
         }
 
-        // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit otomatis kembali menjadi draft
+        // Jika kursus berstatus dipublikasikan atau ditolak, saat diedit otomatis kembali menjadi menunggu_approval
         if ($pembelajaran->status === 'dipublikasikan' || $pembelajaran->status === 'ditolak') {
-            $updateData['status'] = 'draft';
+            $updateData['status'] = 'menunggu_approval';
+
+            \App\Models\ValidasiPembelajaran::updateOrCreate(
+                ['pembelajaran_id' => $pembelajaran->pembelajaran_id],
+                [
+                    'divalidasi_oleh_pengguna_id' => $user->pengguna_id,
+                    'status_validasi' => 'diajukan',
+                    'catatan' => null
+                ]
+            );
         }
 
         if ($request->hasFile('surat_pernyataan')) {
